@@ -37,6 +37,12 @@ namespace SignControl
             Text = text;
             TextColor = Color.White;
         }
+        public SignTextElement(string text, Color c)
+        {
+            Text = text;
+            TextColor = c;
+        }
+
         public override void SetContext(SignRender c)
         {
             int height = c.Configuration.Height - 3;

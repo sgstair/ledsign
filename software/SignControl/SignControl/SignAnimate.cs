@@ -14,7 +14,6 @@ namespace SignControl
         public event SignNotification FrameComplete;
 
         public SignRender Render;
-        bool UpdateRenderContext;
 
         public ISignContent[] ContentSources;
         SignElement[] ContentElements;
@@ -52,7 +51,6 @@ namespace SignControl
                     Render = new SignRender();
                 }
                 Render.SetConfiguration(c);
-                UpdateRenderContext = true;
             }
         }
 
@@ -63,7 +61,6 @@ namespace SignControl
             {
                 ContentSources = sources;
                 ContentElements = newElements;
-                UpdateRenderContext = true;
             }
         }
 
@@ -98,12 +95,9 @@ namespace SignControl
 
                 if (ContentElements != null)
                 {
-                    if (UpdateRenderContext)
+                    foreach (SignElement e in ContentElements)
                     {
-                        foreach (SignElement e in ContentElements)
-                        {
-                            e.SetContext(Render);
-                        }
+                        e.SetContext(Render);
                     }
 
                     // Advance anmiation
@@ -129,7 +123,7 @@ namespace SignControl
                             { 
                                 // Advance to next element
                                 AnimateFirstElement++;
-                                AnimateElementOffset -= firstElement.Width + ElementSpacing;
+                                AnimateElementOffset += firstElement.Width + ElementSpacing;
                             }
 
                             DelayTime = FramesPerScroll - 1;
@@ -162,6 +156,25 @@ namespace SignControl
 
                 }                
                 SendFrameComplete();
+
+
+                if (ContentElements != null)
+                {
+                    // Rebuild content list if necessary. Do this after rendering to reduce jitter. 
+                    // May not be that important. (measure later)
+                    bool needRebuild = false;
+                    foreach (ISignContent sc in ContentSources)
+                    {
+                        if (sc.HasUpdate)
+                            needRebuild = true;
+                    }
+
+                    if (needRebuild)
+                    {
+                        ContentElements = ContentSources.SelectMany((s) => s.GetElements()).ToArray();
+
+                    }
+                }
             }
         }
 

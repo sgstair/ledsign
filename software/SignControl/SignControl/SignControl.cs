@@ -15,12 +15,12 @@ namespace SignControl
         SignAnimate Animate;
 
         List<SignTargetUI> Targets;
-        List<ISignContent> Elements;
+        List<SignElementUI> Elements;
         public SignControl()
         {
             InitializeComponent();
             Targets = new List<SignTargetUI>();
-            Elements = new List<ISignContent>();
+            Elements = new List<SignElementUI>();
             Animate = new SignAnimate();
             Animate.FrameComplete += Animate_FrameComplete;
 
@@ -33,10 +33,11 @@ namespace SignControl
             }
             comboBox2.SelectedIndex = 0;
 
+            listBox1.Items.Add("Global Configuration");
 
             // Add some things for test purproses.
             AddSignTarget(new SignPreview());
-            AddSignElement(SignContentFactory.Create("Simple Text"));
+            AddSignElement(SignContentFactory.GetFromName("Simple Text"));
         }
 
         void Animate_FrameComplete(SignAnimate a)
@@ -53,11 +54,6 @@ namespace SignControl
             }
         }
 
-        private void tableLayoutPanel1_Paint(object sender, PaintEventArgs e)
-        {
-
-        }
-
         private void button1_Click(object sender, EventArgs e)
         {
             // Adding a sign target
@@ -67,22 +63,52 @@ namespace SignControl
         private void button2_Click(object sender, EventArgs e)
         {
             // Add a sign element
-            AddSignElement(SignContentFactory.Create((string)comboBox2.SelectedItem));
+            AddSignElement(SignContentFactory.GetFromName((string)comboBox2.SelectedItem));
         }
 
-        void AddSignElement(ISignContent e)
+        void AddSignElement(SignContentType e)
         {
+            SignElementUI se = new SignElementUI();
+            se.ContentType = e;
+            se.Content = SignContentFactory.Create(e);
+            try
+            {
+                se.ContentControl = SignContentFactory.CreateControl(e);
+                se.ContentControl.BindToContent(se.Content);
+                se.ContentControl.ContentChange += ContentControl_ContentChange;
+            }
+            catch
+            {
+                se.ContentControl = null; // If there are errors, don't use the UI. (allow controls without UI)
+            }
+
             ISignContent[] newElements;
             lock(Elements)
             {
-                Elements.Add(e);
+                Elements.Add(se);
 
-                listBox1.Items.Add(e.ToString());
+                listBox1.Items.Add(se.Content.Summary);
 
-                newElements = Elements.ToArray();
+                newElements = Elements.Select(i => i.Content).ToArray();
             }
 
             Animate.SetContent(newElements);
+        }
+
+        bool SuppressListboxChange = false;
+        void ContentControl_ContentChange(ISignContent content)
+        {
+            // Figure out which element this was and update the listbox text.
+            for(int i=0;i<Elements.Count;i++)
+            {
+                if(Elements[i].Content == content)
+                {
+                    SuppressListboxChange = true;
+                    listBox1.Items[i + 1] = content.Summary;
+                    SuppressListboxChange = false;
+                    break;
+                }
+            }
         }
 
 
@@ -140,6 +166,44 @@ namespace SignControl
             // Apply configuration to all other displays for now. Maybe support multiple configurations in the future.
         }
 
+        private void listBox1_SelectedIndexChanged(object sender, EventArgs e)
+        {
+            if (SuppressListboxChange) return;
+            ccPanel.Controls.Clear();
+            int index = listBox1.SelectedIndex;
+            if (index < 0) return;
+            if (index == 0)
+            {
+                // global state
+            }
+            else
+            {
+                // Setup the panel from a given control.
+                SignElementUI se = Elements[index - 1];
+                if (se.ContentControl != null)
+                {
+                    Control c = se.ContentControl as Control;
+                    if (c != null)
+                    {
+                        c.Location = Point.Empty;
+                        c.Width = ccPanel.Width;
+                        c.Height = ccPanel.Height;
+                        ccPanel.Controls.Add(c);
+                        c.Anchor = AnchorStyles.Top | AnchorStyles.Bottom | AnchorStyles.Left | AnchorStyles.Right;
+                    }
+                }
+            }
+        }
+
+
+
+    }
+
+    public class SignElementUI
+    {
+        public SignContentType ContentType;
+        public ISignContent Content;
+        public ISignContentControl ContentControl;
 
 
     }

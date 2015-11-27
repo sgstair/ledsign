@@ -61,6 +61,9 @@ namespace SignControl
             {
                 SignOutput = new Bitmap(Configuration.Width, Configuration.Height);
                 SignGraphics = Graphics.FromImage(SignOutput);
+                SignGraphics.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+                SignGraphics.TextRenderingHint = System.Drawing.Text.TextRenderingHint.AntiAliasGridFit;
+                // (Disables cleartype, which doesn't make much sense on the LED sign)
             }
             else
             {

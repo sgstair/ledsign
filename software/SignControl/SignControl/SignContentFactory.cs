@@ -10,9 +10,17 @@ namespace SignControl
     public interface ISignContent
     {
         IEnumerable<SignElement> GetElements();
-
+        bool HasUpdate { get; }
+        string Summary { get; }
     }
 
+    public delegate void SignContentNotify(ISignContent content);
+
+    public interface ISignContentControl
+    {
+        void BindToContent(ISignContent content);
+        event SignContentNotify ContentChange;
+    }
 
     class SignContentAttribute : Attribute
     {
@@ -25,7 +33,7 @@ namespace SignControl
     }
 
 
-    class SignContentType
+    public class SignContentType
     {
         public string Name;
         
@@ -61,6 +69,14 @@ namespace SignControl
             return Types;
         }
 
+        public static SignContentType GetFromName(string name)
+        {
+            if (Types == null)
+                EnumerateContentTypes();
+
+            return TypeMap[name];
+        }
+
         public static ISignContent Create(SignContentType t)
         {
             object o = Assembly.GetCallingAssembly().CreateInstance(t.ContentClassType.FullName);
@@ -74,10 +90,22 @@ namespace SignControl
 
         public static ISignContent Create(string name)
         {
-            if(Types == null)
-                EnumerateContentTypes();
+            return Create(GetFromName(name));
+        }
 
-            return Create(TypeMap[name]);
+        public static ISignContentControl CreateControl(SignContentType t)
+        {
+            object o = Assembly.GetCallingAssembly().CreateInstance(t.ContentClassType.FullName + "Control");
+            if(o is ISignContentControl)
+            {
+                return (ISignContentControl)o;
+            }
+            throw new Exception("No content control available for type: " + t.ContentClassType.FullName);
+        }
+
+        public static ISignContentControl CreateControl(string name)
+        {
+            return CreateControl(GetFromName(name));
         }
     }
 }
