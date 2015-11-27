@@ -55,6 +55,7 @@
     </Compile>
     <Compile Include="Program.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="SignElement.cs" />
     <Compile Include="SignPreview.cs">
       <SubType>Form</SubType>
     </Compile>

@@ -21,6 +21,12 @@ namespace SignControl
 
         Timer FrameTimer;
 
+        // Global rate information - todo: make tweakable.
+        public int FramesPerScroll = 1;
+        public int HoldDelay = 30;
+        public int RecycleDelay = 30;
+        public int ElementSpacing = 5;
+
         public SignAnimate()
         {
             Render = null;
@@ -70,6 +76,17 @@ namespace SignControl
             }
         }
 
+
+        int AnimateFirstElement;
+        int AnimateElementOffset;
+        int DelayTime;
+        void ResetAnimation()
+        {
+            AnimateFirstElement = 0;
+            AnimateElementOffset = 0;
+            DelayTime = 0;
+        }
+
         void FrameTick(object context)
         {
             lock (this)
@@ -89,13 +106,58 @@ namespace SignControl
                         }
                     }
 
-                    for (int i = 0; i < ContentElements.Length; i++)
+                    // Advance anmiation
+                    if(DelayTime > 0)
                     {
-                        Render.ElementXOffset = 0;
+                        DelayTime--;
+                    }
+                    else
+                    {
+                        if(AnimateFirstElement >= ContentElements.Length)
+                        {
+                            DelayTime = RecycleDelay;
+                            AnimateFirstElement = 0;
+                            AnimateElementOffset = 0;
+                        }
+                        else
+                        {
+                            // Scrolling
+                            SignElement firstElement = ContentElements[AnimateFirstElement];
+                            AnimateElementOffset--;
+                            int elementLocation = Render.Configuration.Width + AnimateElementOffset;
+                            if (elementLocation + firstElement.Width < 0)
+                            { 
+                                // Advance to next element
+                                AnimateFirstElement++;
+                                AnimateElementOffset -= firstElement.Width + ElementSpacing;
+                            }
+
+                            DelayTime = FramesPerScroll - 1;
+                        }
+                    }
+
+                    // Render
+                    ElementAnimation animMode = ElementAnimation.None;
+                    int offset = 0;
+                    for (int i = AnimateFirstElement; i < ContentElements.Length; i++)
+                    {
+                        SignElement curElement = ContentElements[i];
+                        if (animMode == ElementAnimation.None)
+                            animMode = curElement.Animation;
+
+                        if (animMode != curElement.Animation)
+                            break;
+
+                        Render.ElementXOffset = Render.Configuration.Width + AnimateElementOffset + offset;
                         Render.ElementYOffset = 0;
 
-                        ContentElements[i].Render(Render);
+                        if (Render.ElementXOffset >= Render.Configuration.Width)
+                            break;
 
+                        curElement.Render(Render);
+
+                        offset += curElement.Width + ElementSpacing;
+                        
                     }
 
                 }                
