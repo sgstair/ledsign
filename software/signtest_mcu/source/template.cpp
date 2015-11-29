@@ -2,7 +2,7 @@
 
 signtest Microcontroller project
 
-Copyright (c) 2014 Stephen Stair (sgstair@akkit.org)
+Copyright (c) 2015 Stephen Stair (sgstair@akkit.org)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
  of this software and associated documentation files (the "Software"), to deal
@@ -77,12 +77,26 @@ typedef unsigned long u32;
 //
 
 // PIO0_4 - LEDRED
-
+int led_red;
 void led_set_red(int value)
+{
+	value = value?1:0;
+	led_red = value;
+	led_set_red_internal(value);
+}
+
+void led_busy(int busy)
+{
+	busy = busy?1:0;
+	led_set_red_internal(led_red ^ busy);
+}
+
+void led_set_red_internal(int value)
 {
 	GPIO0DIR |= (1<<4);
 	GPIO0DATA[(1<<4)] = value?(1<<4):0;
 }
+
 
 // PIO0_5 - LEDGREEN
 
@@ -95,16 +109,29 @@ void led_set_green(int value)
 
 // PIO0_7 (0) - VIN_SOFTIN (~100mA limited power on to 5V)
 // PIO1_10 (0D) - VIN_ON (Turn power fully on to 5V)
+int power_state;
 void SetPowerDriveState(int value) // 0 = off, 1 = soft-on, 2=on
 {
 	GPIO0DIR |= (1<<7);
 	GPIO1DIR |= (1<<10);
 	GPIO0DATA[1<<7] = (value==1?(1<<7):0);
 	GPIO1DATA[1<<10] = (value==2?(1<<10):0);
+	power_state = value;
+}
+
+int GetPowerDriveState()
+{
+	return power_state;
 }
 
 
-
+// PIO1_8 (0) - SENSE1 (Sense when fpga board is inserted)
+// PIO1_9 (0) - SENSE2 
+int GetSense() // Returns bottom 2 bits as sense pin status. Zero means board is present.
+{
+	GPIO1DIR &= ~(0x300);
+	return (GPIO1DATA[0x300] >> 8) & 3;
+}
 
 
 
@@ -558,7 +585,8 @@ int main(void) {
 
 	// Set default values for critical pins
 	SetPowerDriveState(0);
-
+	led_set_red(0);
+	led_set_green(1);
 
 	ReadDeviceUID();
 
@@ -608,6 +636,8 @@ int main(void) {
 	usb_init();
 
 	dpc_resume();
+
+	led_set_green(0);
 
 	// Don't return.
 	while(1)

@@ -1,5 +1,5 @@
 /*
-Copyright (c) 2014 Stephen Stair (sgstair@akkit.org)
+Copyright (c) 2015 Stephen Stair (sgstair@akkit.org)
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
  of this software and associated documentation files (the "Software"), to deal
@@ -637,8 +637,50 @@ void HandleSetupPacket()
 				programcount = 5;
 				goto success;
 				
-			// Todo: add relevant vendor commands.
 			
+			case 0x10: // Read device status. Returns 3 16bit little endian values (VIN, 3V3, 1V2, in 2:14 fixed point) followed by a byte with SENSE pins
+				if(bmRequestType != 0xC0) // Device to host.
+					break;
+					
+				break;
+				
+			case 0x11: // Set device mode. wValue = mode. Returns one byte, 0 = failure, 1=success
+				// Modes are 0 (disconnected, idle), 1 (soft-on FPGA), 2 (full-on FPGA), 3 (FPGA reset, Flash SPI engaged), 4 (FPGA boot/reboot, transition to FPGA spi once a FPGA SPI request is made)
+				if(bmRequestType != 0xC0) // Device to host.
+					break;
+					
+				break;
+				
+			case 0x12: // Set LED state. bit 0 = Green LED, bit 1 = Red LED
+				break;
+				
+			case 0x18: // Read/Write scratch pad. Scratch pad is a 256-byte area used to collect data for programming 256-bytes at a time, or SPI transfers.
+				break;
+			case 0x19: // Fill scratch pad with 0xFF
+				break;
+				
+			case 0x1A: // Flash raw SPI. Exchange wLength bytes with scratch pad, and return the resulting bytes.
+				break;
+			case 0x1B: // FPGA raw SPI. Exchange wLength bytes with scratch pad, and return the resulting bytes.
+				break;
+				
+			case 0x20: // Flash erase sector. Returns byte (0=failure, 1=success). Sector index in wValue (4096 byte sectors)
+				break;
+			case 0x21: // Flash erase block. Returns byte status, Block index in wValue (64k block size)
+				break;
+			case 0x22: // Flash read (up to) 256-byte block. Address/256 in wValue. wLength controls read length
+				break;
+			case 0x23: // Flash program 256-byte block from scratch pad. Address/256 in wValue. Returns byte status.
+				break;
+			case 0x24: // Flash read ID + set lockout. wValue = 0 (device locked to known ID), = 1 (Will allow use of any chip) - returns 4-byte little endian RDID value
+				break;
+				
+			case 0x28: // Compute flash 64k CRC32. Address/256 in wValue, reads 64k bytes and returns 4-byte Little Endian CRC32. (for quick validation)
+				break;
+			
+			
+			
+			// Todo: JTAG, not important for early bringup though. Reprogramming the flash is easy/fast enough.
 			
 			case 0x41:
 			switch(wIndex)
@@ -891,6 +933,7 @@ void usbint_frame()
 }
 void usbint_ep0()
 { // Endpoint 0 OUT (into device)
+	led_busy(1);
 	// If we got a setup packet, we should handle it
 	int ep = Usb_SelectEndpointClearInterrupt(0);
 	if(ep&4) { HandleSetupPacket(); }
@@ -908,6 +951,7 @@ void usbint_ep0()
 		} 
 	}
 	// We really shouldn't see any other types of packets here.
+	led_busy(0);
 }
 void usbint_ep1()
 { // Endpoint 0 IN (out from device)
