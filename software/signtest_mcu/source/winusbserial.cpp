@@ -25,7 +25,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 #include "system.h"
 #include "fifobuf.h"
 #include "dpc.h"
-
+#include "io.h"
 
 
 char config;
@@ -34,6 +34,13 @@ char shouldackin0;
 const void* configdata_start;
 short configdata_cursor;
 short configdata_length;
+
+int flash_lockout; // 0 = don't know flash status or incorrect flash chip. 1 = flash ok.
+
+unsigned char *incoming_data_location;
+int incoming_data_length;
+
+unsigned char scratch_pad[256];
 
 unsigned char config_bytes[800];
 
@@ -117,6 +124,24 @@ const unsigned char descriptor_configuration[] = {
 };
 
 const unsigned char usbstring_langids[] = { 4, 3, 9, 4 };
+
+
+int flash_locked(int override = 0)
+{
+	if(override)
+		flash_lockout = 1;
+		
+	if(flash_lockout == 0)
+	{
+		// Check the chip ID
+		int id = flash_RDID();
+		if(id == Flash_ID)
+			flash_lockout = 1;
+	}
+	
+	return flash_lockout;
+}
+
 
 
 
@@ -539,7 +564,7 @@ void HandleSetupPacket()
 	// Cancel in flight request.
 	configdata_start = 0;
 	shouldackin0 = 0;
-
+	incoming_data_location = 0;
 
 	// Decode fields for convenience.
 	unsigned char bmRequestType = setupreq[0];
@@ -633,7 +658,7 @@ void HandleSetupPacket()
 			// ReqeustType 0xC0 = device to host, 0x40 = host to device.
 		
 
-			case 0x02: // Reprogram device
+			case 0x02: // Reprogram device (after a short delay, kick the device into programming mode)
 				programcount = 5;
 				goto success;
 				
@@ -642,40 +667,183 @@ void HandleSetupPacket()
 				if(bmRequestType != 0xC0) // Device to host.
 					break;
 					
-				break;
+				config_bytes[0] = adc_last[0] & 0xFF;
+				config_bytes[1] = (adc_last[0] >> 8) & 0xFF;
+				config_bytes[2] = adc_last[1] & 0xFF;
+				config_bytes[3] = (adc_last[1] >> 8) & 0xFF;
+				config_bytes[4] = adc_last[2] & 0xFF;
+				config_bytes[5] = (adc_last[2] >> 8) & 0xFF;
+				config_bytes[6] = GetSense();
+					
+				send_configdata(config_bytes, 7, wLength);
+				return;
 				
 			case 0x11: // Set device mode. wValue = mode. Returns one byte, 0 = failure, 1=success
 				// Modes are 0 (disconnected, idle), 1 (soft-on FPGA), 2 (full-on FPGA), 3 (FPGA reset, Flash SPI engaged), 4 (FPGA boot/reboot, transition to FPGA spi once a FPGA SPI request is made)
 				if(bmRequestType != 0xC0) // Device to host.
 					break;
-					
-				break;
 				
-			case 0x12: // Set LED state. bit 0 = Green LED, bit 1 = Red LED
-				break;
+				{
+					int result = 1;	
+					switch(wValue)
+					{
+					case 0: // Idle, disconnect, discharge
+						flash_lockout = 0; // Rediscover flash if we power on again.
+						fpga_prog(1);
+						SpiRelease();
+						SetPowerDriveState(0);
+						break;
+						
+					case 1: // Soft-on
+						flash_lockout = 0; // Rediscover flash if we power on again.
+						fpga_prog(1);
+						SpiRelease();
+						SetPowerDriveState(1);
+						break;
+						
+					case 2: // Full-on
+						flash_lockout = 0; // Rediscover flash if we power on again.
+						fpga_prog(1);
+						SpiRelease();
+						SetPowerDriveState(2);
+						break;
+
+					case 3: // Hold FPGA in reset, engage SPI for flash (can skip state 2)
+						fpga_prog(1);
+						SpiEngage();
+						SetPowerDriveState(2);
+						break;
+						
+					case 4: // Reboot FPGA. Must have been in a previous power on state.
+						SpiRelease();
+						fpga_prog(0); // This will reset the FPGA even if it was 0 previously.
+						result = fpga_waitboot();
+						break;
+						
+					default:
+						result = 0;
+					}
+						
+					send_config1byte(result, wLength);	
+				}
+				return;
+				
+			case 0x12: // Set LED state. wValue bit 0 = Green LED, bit 1 = Red LED
+				led_set_red(wValue & 2);
+				led_set_green(wValue & 1);
+				goto success;
 				
 			case 0x18: // Read/Write scratch pad. Scratch pad is a 256-byte area used to collect data for programming 256-bytes at a time, or SPI transfers.
+				// wValue = offset in scratch pad to start operation. wLength = length of read/write operation
+				if(wLength > 256)
+					break;
+					
+				if(bmRequestType == 0xC0)
+				{
+					// Device to host
+					if(wValue + wLength > 256)
+					{
+						// Clip length if it would overrun the buffer (make host side code simpler)
+						wLength = 256-wValue;
+					}
+					send_configdata(scratch_pad + wValue, wLength, wLength);
+					return;
+				} 
+				else if(bmRequestType == 0x40)
+				{
+					// Host to device (catch incoming data buffers and write them to memory)
+					if(wValue + wLength > 256)
+						break; // Cannot tolerate host sending too much data.
+
+					incoming_data_location = scratch_pad + wValue;
+					incoming_data_length = wLength;
+					return; // To be completed by the incoming data handler.
+				}
 				break;
+				
 			case 0x19: // Fill scratch pad with 0xFF
-				break;
+				for(int i = 0; i < 256; i++)
+				{
+					scratch_pad[i] = 0xFF;
+				}
+				goto success;
 				
 			case 0x1A: // Flash raw SPI. Exchange wLength bytes with scratch pad, and return the resulting bytes.
-				break;
+				if(bmRequestType != 0xC0) // Device to host.
+					break;
+				if(wLength > 256)
+					break;
+					
+				flash_spiexchange(scratch_pad, wLength);
+				send_configdata(scratch_pad, wLength, wLength);
+				return;
+				
 			case 0x1B: // FPGA raw SPI. Exchange wLength bytes with scratch pad, and return the resulting bytes.
-				break;
+				if(bmRequestType != 0xC0) // Device to host.
+					break;
+				if(wLength > 256)
+					break;
+					
+				fpga_spiexchange(scratch_pad, wLength);
+				send_configdata(scratch_pad, wLength, wLength);
+				return;
 				
 			case 0x20: // Flash erase sector. Returns byte (0=failure, 1=success). Sector index in wValue (4096 byte sectors)
-				break;
-			case 0x21: // Flash erase block. Returns byte status, Block index in wValue (64k block size)
-				break;
-			case 0x22: // Flash read (up to) 256-byte block. Address/256 in wValue. wLength controls read length
-				break;
-			case 0x23: // Flash program 256-byte block from scratch pad. Address/256 in wValue. Returns byte status.
-				break;
-			case 0x24: // Flash read ID + set lockout. wValue = 0 (device locked to known ID), = 1 (Will allow use of any chip) - returns 4-byte little endian RDID value
-				break;
+				if(bmRequestType != 0xC0) // Device to host.
+					break;
 				
-			case 0x28: // Compute flash 64k CRC32. Address/256 in wValue, reads 64k bytes and returns 4-byte Little Endian CRC32. (for quick validation)
+				flash_erase_sector(wValue * Flash_SectorSize);
+				send_config1byte(flash_waitbusy(), wLength);
+				return;
+
+			case 0x21: // Flash erase block. Returns byte status, Block index in wValue (64k block size)
+				if(bmRequestType != 0xC0) // Device to host.
+					break;
+				
+				flash_erase_sector(wValue * Flash_SectorSize);
+				send_config1byte(flash_waitbusy(), wLength);
+				return;
+
+			case 0x22: // Flash read (up to) 256-byte block. Address/256 in wValue. wLength controls read length (overwrites scratch pad)
+				if(bmRequestType != 0xC0) // Device to host.
+					break;
+				if(wLength > 256)
+					break;
+				
+				flash_read(wValue * 256, wLength, scratch_pad);
+				send_configdata(scratch_pad, wLength, wLength);
+				return;
+				
+			case 0x23: // Flash program 256-byte block from scratch pad. Address/256 in wValue. Returns byte status.
+				if(bmRequestType != 0xC0) // Device to host.
+					break;
+				if(wLength > 256)
+					break;
+				
+				flash_program(wValue * 256, wLength, scratch_pad);
+				send_config1byte(flash_waitbusy(), wLength);
+				return;
+
+			case 0x24: // Flash read ID + set lockout. wValue = 0 (device locked to known ID), = 1 (Will allow use of any chip) - returns 4-byte little endian RDID value
+				if(bmRequestType != 0xC0) // Device to host.
+					break;
+
+				if(wValue == 1)
+					flash_locked(1); // Override the flash check
+					
+				{
+					int id = flash_RDID();
+					send_copyconfigdata(&id, 4, wLength);
+				}
+				return;
+				
+			case 0x28: // Compute flash 64k CRC32. (uses scratchpad) 
+					   // Address/256 in wValue, reads 64k bytes and returns 4-byte Little Endian CRC32. (for quick validation)
+				if(bmRequestType != 0xC0) // Device to host.
+					break;  
+					
+				// todo
+					   
 				break;
 			
 			
@@ -752,6 +920,8 @@ void usb_reset()
 	USBDEVINTCLR = 0xFFFF;
 	config = 0;
 	configdata_start = 0; // Disable sending of config data);
+	incoming_data_location = 0;
+	flash_lockout = 0;
 
 	Usb_SetDeviceStatus(1); // Connect!
 
@@ -940,8 +1110,33 @@ void usbint_ep0()
 	else
 	{
 		if(ep&1) { 	
-			Usb_ClearBuffer(); // Pretend we didn't see.
-			if(shouldackin0)
+			int zlp = 0;
+			if(incoming_data_location)
+			{
+				// Catch incoming data
+				int len = ReadPacketLength(0);
+				if(len > incoming_data_length)
+					len = incoming_data_length;
+					
+				ReadPacket(0, incoming_data_location, len);
+				
+				incoming_data_location += len;
+				incoming_data_length -= len;
+				if(incoming_data_length == 0)
+				{
+					zlp = 1;
+					incoming_data_location = 0;
+				}
+				
+			}
+			else
+			{
+				// Ignore incoming data
+				zlp = shouldackin0; // Sometimes acknowledge data we have ignored.
+			}
+		
+			Usb_ClearBuffer(); // release the buffer
+			if(zlp)
 			{
 				Usb_SelectEndpoint(1);
 				WritePacket(1, config_bytes, 0); // Write 0 length ACK (there should be a buffer available)

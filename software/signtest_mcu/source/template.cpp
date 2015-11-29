@@ -36,8 +36,8 @@ typedef unsigned long u32;
 
 // IO mappings (with function) for usbstep board
 
-// PIO0_5 (0) - LEDGREEN
-// PIO0_4 (0) - LEDRED
+// PIO0_5 (0) - LEDRED (LEDs are inverted; They're attached to the I2C pins that can only pull down.)
+// PIO0_4 (0) - LEDGREEN (also the schematic has the LEDs backwards.)
 
 // PIO0_0 - RST
 // PIO0_1 (0) - PROG (free button)
@@ -76,8 +76,15 @@ typedef unsigned long u32;
 //  Stateless I/O
 //
 
-// PIO0_4 - LEDRED
+// PIO0_5 - LEDRED
 int led_red;
+
+void led_set_red_internal(int value)
+{
+	GPIO0DIR |= (1<<5);
+	GPIO0DATA[(1<<5)] = value?0:(1<<5);
+}
+
 void led_set_red(int value)
 {
 	value = value?1:0;
@@ -91,19 +98,14 @@ void led_busy(int busy)
 	led_set_red_internal(led_red ^ busy);
 }
 
-void led_set_red_internal(int value)
-{
-	GPIO0DIR |= (1<<4);
-	GPIO0DATA[(1<<4)] = value?(1<<4):0;
-}
 
 
-// PIO0_5 - LEDGREEN
+// PIO0_4 - LEDGREEN
 
 void led_set_green(int value)
 {
-	GPIO0DIR |= (1<<5);
-	GPIO0DATA[(1<<5)] = value?(1<<5):0;
+	GPIO0DIR |= (1<<4);
+	GPIO0DATA[(1<<4)] = value?0:(1<<4);
 }
 
 
@@ -157,7 +159,7 @@ const int FlashCmd_ReleasePowerDown = 0xAB;
 
 
 // PIO1_2 (1D) - DBGIO5, fpga pin (Connected additionally to FPGA_PROG# by connecting B10 and B8 on the PCI Express connector)
-void FPGA_prog(int halt) // 1 = stop FPGA, 0 = run FPGA
+void fpga_prog(int halt) // 1 = stop FPGA, 0 = run FPGA
 {
 
 	// halt
@@ -381,6 +383,15 @@ void flash_program(int address, int length, unsigned char* data)
 	SpiData(0, data, length);
 	flash_csenable(0);	
 }
+
+void flash_spiexchange(unsigned char * dataSwap, int length)
+{
+	SpiEngage();
+	flash_csenable(1);
+	SpiData(dataSwap, dataSwap, length);
+	flash_csenable(0);
+}
+
 
 
 void fpga_spiexchange(unsigned char * dataSwap, int length)

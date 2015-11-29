@@ -29,11 +29,13 @@ void led_set_red(int value);
 void led_set_green(int value);
 void led_busy(int busy);
 
-void SetPowerDriveState(int value) // 0 = off, 1 = soft-on, 2=on
+void SetPowerDriveState(int value); // 0 = off, 1 = soft-on, 2=on
 int GetPowerDriveState();
 
 int GetSense(); // Returns bottom 2 bits as sense pin status. Zero means board is present.
 
+
+extern int adc_last[3]; // 2:14 raw ADC values: VIN, 3v3, 1v2 sense lines.
 
 
 
@@ -56,9 +58,9 @@ void flash_erase_sector(int sectorAddress);
 void flash_erase_block(int blockAddress);
 void flash_read(int address, int length, unsigned char* data);
 void flash_program(int address, int length, unsigned char* data);
+void flash_spiexchange(unsigned char * dataSwap, int length);
 
-
-void FPGA_prog(int halt); // 1 = stop FPGA, 0 = run FPGA
+void fpga_prog(int halt); // 1 = stop FPGA, 0 = run FPGA
 void fpga_spiexchange(unsigned char * dataSwap, int length);
 int fpga_waitboot(); // Returns 1 on success.
 
