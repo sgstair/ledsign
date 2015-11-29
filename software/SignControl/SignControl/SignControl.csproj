@@ -69,6 +69,12 @@
       <DependentUpon>SignPreview.cs</DependentUpon>
     </Compile>
     <Compile Include="SignRender.cs" />
+    <Compile Include="SignTargetConfigure.cs">
+      <SubType>Form</SubType>
+    </Compile>
+    <Compile Include="SignTargetConfigure.Designer.cs">
+      <DependentUpon>SignTargetConfigure.cs</DependentUpon>
+    </Compile>
     <EmbeddedResource Include="ContentSimpleTextControl.resx">
       <DependentUpon>ContentSimpleTextControl.cs</DependentUpon>
     </EmbeddedResource>
@@ -86,6 +92,9 @@
     </EmbeddedResource>
     <EmbeddedResource Include="SignPreview.resx">
       <DependentUpon>SignPreview.cs</DependentUpon>
+    </EmbeddedResource>
+    <EmbeddedResource Include="SignTargetConfigure.resx">
+      <DependentUpon>SignTargetConfigure.cs</DependentUpon>
     </EmbeddedResource>
     <None Include="Properties\Settings.settings">
       <Generator>SettingsSingleFileGenerator</Generator>

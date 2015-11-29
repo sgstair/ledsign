@@ -14,6 +14,8 @@ namespace SignControl
     {
         SignAnimate Animate;
 
+        SignTargetConfigure ConfigWindow;
+
         List<SignTargetUI> Targets;
         List<SignElementUI> Elements;
         public SignControl()
@@ -50,6 +52,13 @@ namespace SignControl
                     {
                         st.Target.SendImage(a.Render.SignOutput);
                     }
+                }
+            }
+            if(ConfigWindow != null)
+            {
+                if(ConfigWindow.Visible)
+                {
+                    ConfigWindow.UpdateFrame(a.Render.SignOutput);
                 }
             }
         }
@@ -157,13 +166,31 @@ namespace SignControl
 
         internal void ConfigureSignTarget(SignTargetUI targetUI)
         {
+            if(ConfigWindow == null)
+            {
+                ConfigWindow = new SignTargetConfigure(this);
+            }
+            ConfigWindow.SetTarget(targetUI);
+            ConfigWindow.Show();
+        }
 
+        public void UpdateConfiguration(SignTargetUI target)
+        {
+            // Apply configuration to all other displays for now. Maybe support multiple configurations in the future.
+            SignConfiguration c = target.Target.CurrentConfiguration();
+            foreach(SignTargetUI t in Targets)
+            {
+                if(t != target)
+                {
+                    t.Target.ApplyConfiguration(c);
+                }
+            }
+            Animate.SetConfiguration(c);
         }
 
         public void CompleteConfiguration(SignTargetUI target)
         {
             target.UseConfigureDisplay = false;
-            // Apply configuration to all other displays for now. Maybe support multiple configurations in the future.
         }
 
         private void listBox1_SelectedIndexChanged(object sender, EventArgs e)

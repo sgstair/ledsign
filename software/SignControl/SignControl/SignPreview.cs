@@ -91,7 +91,7 @@ namespace SignControl
 
                 foreach (SignComponent c in CurrentConfig.Components)
                 {
-                    Rectangle srcRect = new Rectangle(c.X, c.Y, c.Width, c.Height);
+                    RectangleF srcRect = new RectangleF(c.X - 0.5f, c.Y - 0.5f, c.Width, c.Height);
                     Rectangle destRect = new Rectangle(c.X * ScaleBy, c.Y * ScaleBy, c.Width * ScaleBy, c.Height * ScaleBy);
                     g.DrawImage(CurrentRender, destRect, srcRect, GraphicsUnit.Pixel);
                 }

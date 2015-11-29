@@ -26,9 +26,18 @@ namespace SignControl
             Height = Components.Max((c) => c.Height + c.Y);
         }
     }
-    public class SignComponent
+    public struct SignComponent
     {
         public int X, Y, Width, Height;
+
+        public bool Overlaps(SignComponent other)
+        {
+            return (X + Width > other.X) &&
+                (other.X + other.Width > X) &&
+                (Y + Height > other.Y) &&
+                (other.Y + other.Height > Y);
+
+        }
     }
 
     public class SignRender
