@@ -1,0 +1,6 @@
+[submodule "winusbdotnet"]
+	path = winusbdotnet
+	url = https://github.com/sgstair/winusbdotnet.git
+[submodule "software\\winusbdotnet"]
+	path = software\\winusbdotnet
+	url = https://github.com/sgstair/winusbdotnet.git
