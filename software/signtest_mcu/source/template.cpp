@@ -109,15 +109,31 @@ void led_set_green(int value)
 }
 
 
-// PIO0_7 (0) - VIN_SOFTIN (~100mA limited power on to 5V)
+// PIO0_7 (0) - VIN_SOFTON (~100mA limited power on to 5V) - Low is enable, release to disable (Board modified to include missing pullup resistors)
 // PIO1_10 (0D) - VIN_ON (Turn power fully on to 5V)
 int power_state;
 void SetPowerDriveState(int value) // 0 = off, 1 = soft-on, 2=on
 {
-	GPIO0DIR |= (1<<7);
-	GPIO1DIR |= (1<<10);
-	GPIO0DATA[1<<7] = (value==1?(1<<7):0);
-	GPIO1DATA[1<<10] = (value==2?(1<<10):0);
+	if(value&2)
+	{
+		GPIO1DIR |= (1<<10); // Pull gate line down to enable the P-fet
+		GPIO1DATA[1<<10] = 0;
+	}
+	else
+	{
+		GPIO1DIR &= ~(1<<10); // Release gate line and it will float up to 5V to turn off the P-fet
+	}
+
+	if(value&1)
+	{
+		GPIO0DIR |= (1<<7);
+		GPIO0DATA[1<<7] = 0;
+	}
+	else
+	{
+		GPIO0DIR &= ~(1<<7);
+	}
+	
 	power_state = value;
 }
 
@@ -521,7 +537,7 @@ void ad_init()
 	InterruptClear(INT_ADC);
 	InterruptSetPriority(INT_ADC,0); // HIGHEST priority.
 
-	AD0INTEN = 0x80; // Interrupt on AD7 conversion.
+	AD0INTEN = 0x04; // Interrupt on AD2 conversion.
 	AD0CR = 0x07 | // SEL = AD0,1,2
 			(39<<8) | // CLKDIV = 39 (divide by 40) - to achieve 0.6MHz (should be <= 4.5 MHz)
 			(1<<16); // BURST - hardware scan through ADC conversions.

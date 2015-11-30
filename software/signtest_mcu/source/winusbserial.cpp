@@ -800,7 +800,7 @@ void HandleSetupPacket()
 				if(bmRequestType != 0xC0) // Device to host.
 					break;
 				
-				flash_erase_sector(wValue * Flash_SectorSize);
+				flash_erase_sector(wValue * Flash_BlockSize);
 				send_config1byte(flash_waitbusy(), wLength);
 				return;
 
