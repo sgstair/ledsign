@@ -191,7 +191,8 @@ void fpga_prog(int halt) // 1 = stop FPGA, 0 = run FPGA
 	if(!halt)
 	{
 		delayms(2);
-		GPIO1DIR &= ~(1<<2);
+		//GPIO1DIR &= ~(1<<2);
+		GPIO1DATA[1<<2] = (1<<2);
 	}
 }
 
@@ -424,12 +425,12 @@ void fpga_spiexchange(unsigned char * dataSwap, int length)
 	fpga_csenable(0);
 }
 
-
+// PIO1_3 (1D) - DBGIO4, fpga pin (Connected additionally to FPGA_DONE by connecting B11 and B7 on the PCI Express connector on the test board)
 int fpga_waitboot()
 {
 	// CDONE will float up when the FPGA is configured - 1 = configured
 	int counter = 0;
-	while((GPIO1DATA[1] & 1) == 0)
+	while((GPIO1DATA[(1<<3)] & (1<<3)) == 0)
 	{
 		counter++;
 		if(counter > 1000000) return 0;
@@ -612,8 +613,8 @@ int main(void) {
 	IOCON_PIO3_2 = 0;								// PIO3_2 (0) - DBGIO1, fpga
 	IOCON_PIO1_11 = 0 | IOCON_ADMODE_DIGITAL;		// PIO1_11 (0D) - DBGIO2, fpga
 	IOCON_PIO1_4 = 0 | IOCON_ADMODE_DIGITAL;		// PIO1_4 (0D) - DBGIO3, fpga
-	IOCON_PIO1_3 = 1 | IOCON_ADMODE_DIGITAL;		// PIO1_3 (1D) - DBGIO4, fpga pin (Connected additionally to FPGA_DONE by connecting B11 and B7 on the PCI Express connector on the test board)
-	IOCON_PIO1_2 = 1 | IOCON_ADMODE_DIGITAL;		// PIO1_2 (1D) - DBGIO5, fpga pin (Connected additionally to FPGA_PROG# by connecting B10 and B8 on the PCI Express connector)
+	IOCON_PIO1_3 = 1 | IOCON_ADMODE_DIGITAL; 		// PIO1_3 (1D) - DBGIO4, fpga pin (Connected additionally to FPGA_DONE by connecting B11 and B7 on the PCI Express connector on the test board)
+	IOCON_PIO1_2 = 1 | IOCON_ADMODE_DIGITAL | IOCON_MODE_PULLUP; // PIO1_2 (1D) - DBGIO5, fpga pin (Connected additionally to FPGA_PROG# by connecting B10 and B8 on the PCI Express connector)
 
 
 	// Set default values for critical pins

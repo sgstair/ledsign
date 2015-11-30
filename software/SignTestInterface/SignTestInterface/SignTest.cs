@@ -183,7 +183,7 @@ namespace SignTestInterface
         {
             int firstSector = address / FlashSectorSize;
             int lastSector = (address + length - 1) / FlashSectorSize;
-            for(int i=firstSector; i<lastSector;i++)
+            for (int i = firstSector; i <= lastSector; i++)
             {
                 FlashRawEraseSector(i * FlashSectorSize);
             }

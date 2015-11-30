@@ -824,10 +824,8 @@ void HandleSetupPacket()
 			case 0x23: // Flash program 256-byte block from scratch pad. Address/256 in wValue. Returns byte status.
 				if(bmRequestType != 0xC0) // Device to host.
 					break;
-				if(wLength > 256)
-					break;
 				
-				flash_program(wValue * 256, wLength, scratch_pad);
+				flash_program(wValue * 256, 256, scratch_pad);
 				send_config1byte(flash_waitbusy(), wLength);
 				return;
 

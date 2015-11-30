@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
@@ -19,6 +20,14 @@ namespace SignTestApp
             if (args.Length >= 1)
             {
                 string filename = args[0];
+                string basePath = Environment.CurrentDirectory;
+                while(filename.StartsWith("..\\"))
+                {
+                    basePath = Directory.GetParent(basePath).FullName;
+                    filename = filename.Substring(3);
+                }
+                filename = System.IO.Path.Combine(basePath, filename);
+                
                 t.SetFpgaFilename(filename);
             }
 
@@ -54,9 +63,57 @@ namespace SignTestApp
         public void SetFpgaFilename(string filename)
         {
             byte[] fpgaFile = System.IO.File.ReadAllBytes(filename);
-            FpgaProgram = fpgaFile;
+            FpgaProgram = FixBitstream(fpgaFile);
+            //BitReverseBitstream(FpgaProgram);
+            // Seems to not be necessary?
         }
         public byte[] FpgaProgram;
+
+        byte[] FixBitstream(byte[] srcData)
+        {
+            // For SPI use we need to strip off some header information that confuses the FPGA.
+            // This seems to just be tracking / metadata.
+            // If we encounter a problem, just return the original.
+
+            if (srcData.Length < 256) { return srcData; }
+
+            int ff_count = 0;
+            for(int i=0;i<256; i++)
+            {
+                if(srcData[i] == 0xFF)
+                {
+                    ff_count++;
+                    if (ff_count == 16)
+                    {
+                        // Found the delimeter, 16 0xFF bytes.
+                        i -= 15; // Jump back to the first 0xFF
+                        byte[] newData = new byte[srcData.Length - i + 16];
+                        Array.Copy(srcData, i, newData, 16, newData.Length - 16);
+                        Array.Copy(srcData, i, newData, 0, 16);
+                        return newData;
+                    }
+                }
+                else
+                {
+                    ff_count = 0;
+                }
+            }
+            return srcData;
+        }
+
+        void BitReverseBitstream(byte[] data)
+        {
+            for(int i=0;i<data.Length;i++)
+            {
+                byte temp = data[i];
+                temp = (byte)(((temp & 0x55) << 1) | ((temp & 0xAA) >> 1));
+                temp = (byte)(((temp & 0x33) << 2) | ((temp & 0xCC) >> 2));
+                temp = (byte)((temp >> 4) | (temp << 4));
+                data[i] = temp;
+            }
+        }
+
+
 
         void Reset()
         {
@@ -203,6 +260,18 @@ namespace SignTestApp
                             WriteText("<Space> pressed, resetting test system state.");
                             Reset();
                             break;
+
+                        case 'f':
+                            WriteText("'f' pressed, restarting FPGA");
+                            try
+                            {
+                                Dev.SetMode(SignTest.DeviceMode.FpgaActive); // Restarts FPGA.
+                            }
+                            catch (Exception ex)
+                            {
+                                WriteText(ex.ToString());
+                            }
+                            break;
                     }
                 }
 
@@ -269,7 +338,6 @@ namespace SignTestApp
 
 
                     byte[] checkData = Dev.FlashRead(0, 128);
-                    // HexDump(0, checkData);
 
                     // Confirm whether flash contains the latest program
                     if(FpgaProgram == null)
@@ -283,6 +351,7 @@ namespace SignTestApp
                     if(!CompareBytes(checkData,0,FpgaProgram,0,checkData.Length))
                     {
                         WriteText("Quick check shows we need to reprogram the FPGA.");
+                        HexDump(0, checkData);
                         NextState = TestState.ProgramFpga;
                         break;
                     }
