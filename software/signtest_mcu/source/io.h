@@ -33,7 +33,7 @@ void SetPowerDriveState(int value); // 0 = off, 1 = soft-on, 2=on
 int GetPowerDriveState();
 
 int GetSense(); // Returns bottom 2 bits as sense pin status. Zero means board is present.
-
+int GetButton(); // Return 1 when PROG button is pressed.
 
 extern int adc_last[3]; // 2:14 raw ADC values: VIN, 3v3, 1v2 sense lines.
 

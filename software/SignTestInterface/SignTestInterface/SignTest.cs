@@ -30,6 +30,7 @@ namespace SignTestInterface
             ReadStatus = 0x10,
             SetMode = 0x11,
             SetLed = 0x12,
+            GetButton = 0x13,
 
             ScratchPad = 0x18,
             ClearScratchPad = 0x19, // Set to all FF
@@ -97,6 +98,12 @@ namespace SignTestInterface
             VendorRequestOut(DeviceRequest.SetLed, (ushort)((green ? 1 : 0) | (red ? 2 : 0)));
         }
 
+        public bool GetButton()
+        {
+            byte[] data = VendorRequestIn(DeviceRequest.GetButton, 0, 0, 1);
+            return data[0] == 1;
+        }
+
         public void WriteScratch(byte[] data, int startLocation = 0)
         {
             VendorRequestOut(DeviceRequest.ScratchPad, (ushort)startLocation, 0, data);
@@ -156,13 +163,19 @@ namespace SignTestInterface
         public byte[] FlashRawRead256(int address, int length)
         {
             CheckAddress(address, 256);
-            return VendorRequestIn(DeviceRequest.FlashProgram, (ushort)(address / 256), 0, (ushort)length);
+            return VendorRequestIn(DeviceRequest.FlashRead, (ushort)(address / 256), 0, (ushort)length);
         }
 
         public UInt32 FlashRawCrc64k(int address)
         {
             CheckAddress(address, 256);
             throw new NotImplementedException(); // Also not implemented in the microcontroller currently.
+        }
+
+        public UInt32 FlashReadId(bool useIncompatibleDevice = false)
+        {
+            byte[] data = VendorRequestIn(DeviceRequest.FlashReadId, (ushort)(useIncompatibleDevice ? 1 : 0), 0, 4);
+            return BitConverter.ToUInt32(data,0);
         }
 
 
@@ -182,7 +195,7 @@ namespace SignTestInterface
             int firstBlock = address / 256;
             int lastBlock = (address + length - 1) / 256;
             int writeCursor = 0;
-            for (int i = firstBlock; i < lastBlock;i++)
+            for (int i = firstBlock; i <= lastBlock;i++)
             {
                 int readAddr = i*256;
                 int readBytes = 256;
@@ -213,7 +226,7 @@ namespace SignTestInterface
             int firstBlock = address / 256;
             int lastBlock = (address + data.Length - 1) / 256;
             int writeCursor = 0;
-            for (int i = firstBlock; i < lastBlock; i++)
+            for (int i = firstBlock; i <= lastBlock; i++)
             {
                 int writeAddr = i * 256;
                 int writeBytes = 256;

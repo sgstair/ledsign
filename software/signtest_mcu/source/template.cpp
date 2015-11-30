@@ -152,6 +152,12 @@ int GetSense() // Returns bottom 2 bits as sense pin status. Zero means board is
 }
 
 
+int GetButton() // Return 1 when PROG button is pressed.
+{
+	GPIO0DIR &= ~(1<<1);
+	return (GPIO0DATA[2] == 0);
+}
+
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -570,7 +576,7 @@ void ad_work()
 int main(void) {
 //---------------------------------------------------------------------------------
 
-	SYSAHBCLKCTRL = 0x1655F; // Turn on clock to important devices (gpio, iocon, CT16B1, CT32B1, ADC)
+	SYSAHBCLKCTRL = 0x16D5F; // Turn on clock to important devices (gpio, iocon, CT16B1, CT32B1, ADC)
 
 
 	
@@ -578,7 +584,7 @@ int main(void) {
 	IOCON_PIO0_4 = 0; 								// PIO0_4 (0) - LEDRED
 
 	IOCON_PIO0_0 = 0 | IOCON_MODE_PULLUP; 		    // PIO0_0 (0)  - RST
-	IOCON_PIO0_1 = 0; 								// PIO0_1 - PROG
+	IOCON_PIO0_1 = 0 | IOCON_MODE_PULLUP;			// PIO0_1 - PROG
 	IOCON_PIO0_3 = 1; 								// PIO0_3 (1-VBUS) - USB5V
 	IOCON_PIO0_6 = 1; 								// PIO0_6 (1) - USB_CONNECT#
 

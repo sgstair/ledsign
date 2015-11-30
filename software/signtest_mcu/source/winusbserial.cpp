@@ -733,6 +733,13 @@ void HandleSetupPacket()
 				led_set_green(wValue & 1);
 				goto success;
 				
+			case 0x13: // Get button state (return 1 byte, 1 = button pressed)
+				if(bmRequestType != 0xC0) // Device to host.
+					break;
+					
+				send_config1byte(GetButton(), wLength);
+				return;
+				
 			case 0x18: // Read/Write scratch pad. Scratch pad is a 256-byte area used to collect data for programming 256-bytes at a time, or SPI transfers.
 				// wValue = offset in scratch pad to start operation. wLength = length of read/write operation
 				if(wLength > 256)
