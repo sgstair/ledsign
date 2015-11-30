@@ -1,0 +1,5 @@
+
+NET "CLK" LOC = P93;
+NET "FPGALED" LOC = P99;
+
+
