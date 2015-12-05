@@ -64,8 +64,6 @@ namespace SignTestApp
         {
             byte[] fpgaFile = System.IO.File.ReadAllBytes(filename);
             FpgaProgram = FixBitstream(fpgaFile);
-            //BitReverseBitstream(FpgaProgram);
-            // Seems to not be necessary?
         }
         public byte[] FpgaProgram;
 
@@ -87,9 +85,8 @@ namespace SignTestApp
                     {
                         // Found the delimeter, 16 0xFF bytes.
                         i -= 15; // Jump back to the first 0xFF
-                        byte[] newData = new byte[srcData.Length - i + 16];
-                        Array.Copy(srcData, i, newData, 16, newData.Length - 16);
-                        Array.Copy(srcData, i, newData, 0, 16);
+                        byte[] newData = new byte[srcData.Length - i];
+                        Array.Copy(srcData, i, newData, 0, newData.Length);
                         return newData;
                     }
                 }
@@ -100,19 +97,6 @@ namespace SignTestApp
             }
             return srcData;
         }
-
-        void BitReverseBitstream(byte[] data)
-        {
-            for(int i=0;i<data.Length;i++)
-            {
-                byte temp = data[i];
-                temp = (byte)(((temp & 0x55) << 1) | ((temp & 0xAA) >> 1));
-                temp = (byte)(((temp & 0x33) << 2) | ((temp & 0xCC) >> 2));
-                temp = (byte)((temp >> 4) | (temp << 4));
-                data[i] = temp;
-            }
-        }
-
 
 
         void Reset()
@@ -272,6 +256,38 @@ namespace SignTestApp
                                 WriteText(ex.ToString());
                             }
                             break;
+
+                        case 'c':
+                            WriteText("Going into a cycle of power on/off");
+                            int count = 0;
+                            string statusText = "";
+                            while(true)
+                            {
+                                if(count == 0)
+                                {
+                                    statusText = "Power On";
+                                    Dev.SetLed(true, false);
+                                    Dev.SetMode(SignTest.DeviceMode.On);
+                                    try
+                                    {
+                                        Dev.SetMode(SignTest.DeviceMode.FpgaActive);
+                                    }
+                                    catch { }
+                                }
+                                if(count == 40)
+                                {
+                                    statusText = "Power Off";
+                                    Dev.SetLed(false, false);
+                                    Dev.SetMode(SignTest.DeviceMode.Off);
+                                }
+                                count++;
+                                if(count == 80)
+                                {
+                                    count = 0;
+                                }
+                                UpdateStatus(statusText);
+                                Thread.Sleep(100);
+                            }
                     }
                 }
 

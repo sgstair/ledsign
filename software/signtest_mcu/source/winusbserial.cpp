@@ -717,7 +717,7 @@ void HandleSetupPacket()
 					case 4: // Reboot FPGA. Must have been in a previous power on state.
 						SpiRelease();
 						fpga_prog(0); // This will reset the FPGA even if it was 0 previously.
-						result = fpga_waitboot();
+						result = !fpga_waitboot(); // returns 0 on success.
 						break;
 						
 					default:
