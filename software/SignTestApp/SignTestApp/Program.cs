@@ -60,12 +60,68 @@ namespace SignTestApp
         bool LastPrintedStatus;
         int LastLineLength;
 
+        System.Security.Cryptography.SHA256 sha = System.Security.Cryptography.SHA256.Create();
+
+        string FpgaProgramFilename;
+        DateTime FpgaProgramWriteTime;
+        public byte[] FpgaProgram;
+        public bool RetryReload;
+
+        void ReloadBitstream()
+        {
+            RetryReload = false;
+            try
+            {
+                FileInfo fi = new FileInfo(FpgaProgramFilename);
+                FpgaProgramWriteTime = fi.LastWriteTime;
+                byte[] fpgaFile = System.IO.File.ReadAllBytes(FpgaProgramFilename);
+                byte[] fpgaFileHash = sha.ComputeHash(fpgaFile);
+                FpgaProgram = FixBitstream(fpgaFile);
+
+
+                // Log bitstream information
+                string shaHash = string.Join("", fpgaFileHash.Select(b => b.ToString("x2")));
+                WriteText("Loaded new FPGA bitstream. {0} Date {1} SHA256 {2}", FpgaProgramFilename, FpgaProgramWriteTime, shaHash);
+            }
+            catch(Exception ex)
+            {
+                WriteText("Error while reloading FPGA bitstream. {0}", ex.ToString());
+                RetryReload = true;
+            }
+        }
+
+        void CheckReloadBitstream()
+        {
+            if(RetryReload)
+            {
+                ReloadBitstream();
+                return;
+            }
+
+            if (FpgaProgram == null) 
+                return;
+
+            try
+            {
+                FileInfo fi = new FileInfo(FpgaProgramFilename);
+                if (FpgaProgramWriteTime != fi.LastWriteTime)
+                {
+                    ReloadBitstream();
+                }
+            }
+            catch(Exception ex)
+            {
+                WriteText("(Could not check for updated FPGA bitstream file, file may not exist.)");
+                WriteText(ex.ToString());
+            }
+        }
+
+
         public void SetFpgaFilename(string filename)
         {
-            byte[] fpgaFile = System.IO.File.ReadAllBytes(filename);
-            FpgaProgram = FixBitstream(fpgaFile);
+            FpgaProgramFilename = filename;
+            ReloadBitstream();
         }
-        public byte[] FpgaProgram;
 
         byte[] FixBitstream(byte[] srcData)
         {
@@ -354,6 +410,8 @@ namespace SignTestApp
 
 
                     byte[] checkData = Dev.FlashRead(0, 128);
+
+                    CheckReloadBitstream();
 
                     // Confirm whether flash contains the latest program
                     if(FpgaProgram == null)
