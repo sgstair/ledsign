@@ -8,7 +8,7 @@ Planned modules include stock market, weather, time, arbitrary json content extr
 # Current Status
 * Software to draw and animate a basic sign made of a bunch of elements is basic, but usable.
 * Test board firmware and host side control software working pretty well
-* Having trouble getting the FPGA to boot. Looking into it
-* Once HW is verified, will revise to fix errors and post updated PCB designs.
+* FPGA boots with HW fixes, basic LED panel test works. Working on first pass framebuffer firmware.
+* Once HW is completely verified, will revise to fix errors and post updated PCB designs.
 
-Next update? Probably around Dec 5.
+Next update? Given time. Probably by Dec 13
