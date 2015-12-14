@@ -98,6 +98,7 @@
             // 
             // button5
             // 
+            this.button5.Enabled = false;
             this.button5.Location = new System.Drawing.Point(174, 498);
             this.button5.Name = "button5";
             this.button5.Size = new System.Drawing.Size(75, 23);
@@ -120,6 +121,7 @@
             this.Controls.Add(this.panel1);
             this.Name = "SignTargetConfigure";
             this.Text = "SignTargetConfigure";
+            this.FormClosing += new System.Windows.Forms.FormClosingEventHandler(this.SignTargetConfigure_FormClosing);
             this.ResumeLayout(false);
             this.PerformLayout();
 

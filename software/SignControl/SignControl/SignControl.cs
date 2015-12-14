@@ -169,9 +169,19 @@ namespace SignControl
             if(ConfigWindow == null)
             {
                 ConfigWindow = new SignTargetConfigure(this);
+                ConfigWindow.FormClosing += ConfigWindow_FormClosing;
             }
             ConfigWindow.SetTarget(targetUI);
             ConfigWindow.Show();
+        }
+
+        void ConfigWindow_FormClosing(object sender, FormClosingEventArgs e)
+        {
+            if(ConfigWindow == sender)
+            {
+                CompleteConfiguration(ConfigWindow.ResponseObject);
+                ConfigWindow = null;
+            }
         }
 
         public void UpdateConfiguration(SignTargetUI target)

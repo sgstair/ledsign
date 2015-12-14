@@ -27,6 +27,11 @@ namespace SignControl
 
         public void UpdateFrame(Bitmap signImage)
         {
+            if (!checkBox1.Checked)
+                UpdateFrameInternal(signImage);
+        }
+        void UpdateFrameInternal(Bitmap signImage)
+        {
             lock (this)
             {
                 if (CurrentRender == null || CurrentRender.Width != signImage.Width || CurrentRender.Height != signImage.Height)
@@ -44,7 +49,7 @@ namespace SignControl
 
         internal List<EditElement> Elements;
 
-        SignTargetUI ResponseObject;
+        public SignTargetUI ResponseObject;
         ISignTarget Configuring;
         SignConfiguration InitialConfiguration;
 
@@ -67,28 +72,40 @@ namespace SignControl
                 AddElement(new EditElement(this, c));
             }
             panel1.Invalidate();
+            ConfigurationChange();
         }
 
         void AddElement(EditElement e)
         {
-            Elements.Add(e);
-            panel1.Controls.Add(e.ImageTile);
+            lock (Elements)
+            {
+                Elements.Add(e);
+                panel1.Controls.Add(e.ImageTile);
+            }
         }
 
-        void RemoveElement(EditElement e)
+        internal void RemoveElement(EditElement e)
         {
-            Elements.Remove(e);
-            panel1.Controls.Remove(e.ImageTile);
+            lock (Elements)
+            {
+                Elements.Remove(e);
+                panel1.Controls.Remove(e.ImageTile);
+            }
         }
 
         void UpdateImages()
         {
-            foreach(EditElement e in Elements)
+            lock (Elements)
             {
-                Graphics g = Graphics.FromImage(e.ImageSection);
-                g.Clear(Color.DarkBlue);
-                g.DrawImageUnscaled(CurrentRender, -e.Location.X, -e.Location.Y);
-                e.ImageTile.Invalidate();
+                foreach (EditElement e in Elements)
+                {
+                    e.ImageSection = new Bitmap(e.Location.Width, e.Location.Height);
+                    Graphics g = Graphics.FromImage(e.ImageSection);
+                    g.Clear(Color.DarkBlue);
+                    g.DrawImageUnscaled(CurrentRender, -e.Location.X, -e.Location.Y);
+                    e.ImageTile.Image = e.ImageSection;
+                    e.ImageTile.Invalidate();
+                }
             }
         }
 
@@ -96,6 +113,7 @@ namespace SignControl
         {
             SignConfiguration newConfiguration = new SignConfiguration(Elements.Select(e => e.Location).ToArray());
             Configuring.ApplyConfiguration(newConfiguration);
+            SetIdentify(checkBox1.Checked);
             ParentWindow.UpdateConfiguration(ResponseObject);
         }
 
@@ -128,6 +146,39 @@ namespace SignControl
             ConfigurationChange();
         }
 
+        void SetIdentify(bool enable)
+        {
+            ResponseObject.UseConfigureDisplay = enable;
+            if(enable)
+            {
+                // Generate configuration image;
+                SignRender r = new SignRender();
+                r.SetConfiguration(ResponseObject.Target.CurrentConfiguration());
+
+                r.Clear();
+
+                lock(Elements)
+                {
+                    int index = 1;
+                    foreach(EditElement e in Elements)
+                    {
+                        string text = index.ToString();
+
+                        SizeF sz = r.MeasureText(12, text);
+
+                        r.DrawTextAbsolute(12, text, Color.White,
+                            e.Location.X + (e.Location.Width - sz.Width) / 2,
+                            e.Location.Y + (e.Location.Height - sz.Height) / 2);
+
+                        index++;
+                    }
+                }
+
+                UpdateFrameInternal(r.SignOutput);
+                ResponseObject.Target.SendImage(r.SignOutput);
+            }
+        }
+
 
         private void button1_Click(object sender, EventArgs e)
         {
@@ -149,6 +200,7 @@ namespace SignControl
         private void checkBox1_CheckedChanged(object sender, EventArgs e)
         {
             // Identify
+            SetIdentify(checkBox1.Checked);
         }
 
         private void button3_Click(object sender, EventArgs e)
@@ -162,6 +214,11 @@ namespace SignControl
             // Accept
             ParentWindow.CompleteConfiguration(ResponseObject);
             Hide();
+        }
+
+        private void SignTargetConfigure_FormClosing(object sender, FormClosingEventArgs e)
+        {
+
         }
 
 
@@ -202,6 +259,12 @@ namespace SignControl
             {
                 Dragging = true;
                 ImageTile.Capture = true;
+            }
+            if(e.Button == MouseButtons.Right)
+            {
+                // Delete this element.
+                Parent.RemoveElement(this);
+                Parent.ConfigurationChange();
             }
         }
 

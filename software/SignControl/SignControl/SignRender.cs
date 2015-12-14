@@ -22,6 +22,8 @@ namespace SignControl
         public SignConfiguration(SignComponent[] componentList)
         {
             Components = componentList;
+            Width = Height = 32;
+            if (Components.Length == 0) return;
             Width = Components.Max((c) => c.Width + c.X);
             Height = Components.Max((c) => c.Height + c.Y);
         }
@@ -102,6 +104,11 @@ namespace SignControl
         {
             float x = ElementXOffset + xOffset;
             float y = ElementYOffset + yOffset;
+            DrawTextAbsolute(pixelHeight, text, c, x, y);
+        }
+
+        public void DrawTextAbsolute(int pixelHeight, string text, Color c, float x = 0, float y = 0)
+        {
             Font f = GetFont(pixelHeight);
             SignGraphics.DrawString(text, f, new SolidBrush(c), x, y);
         }
