@@ -24,10 +24,13 @@ entity main is
 		led_D : out std_logic;
 		led_OE : out std_logic;
 		led_STB : out std_logic;
-		led_CLK : out std_logic
+		led_CLK : out std_logic;
+		flash_clk : inout std_logic;
+		flash_mosi : inout std_logic;
+		flash_miso : inout std_logic;
+		dbgio1 : inout std_logic
 	 );
 end main;
-
 architecture Behavioral of main is
 
 signal counter : unsigned(29 downto 0) := (others => '0');
@@ -81,6 +84,22 @@ signal scanline_state : unsigned(2 downto 0);
 
 
 signal dummy_timer : unsigned(19 downto 0);
+
+
+type spi_mode_type is (command, writeaddress, writedata);
+signal spibits : std_logic_vector(31 downto 0);
+signal spibit : unsigned(4 downto 0);
+signal spimode : spi_mode_type;
+signal spioutbyte : std_logic_vector(7 downto 0);
+
+signal spi_write_address : std_logic_vector(15 downto 0);
+signal spi_write_data : std_logic_vector(23 downto 0);
+
+signal spi_address_toggle : std_logic;
+signal spi_data_toggle : std_logic;
+
+signal address_toggle_buffer : std_logic_vector(4 downto 0);
+signal data_toggle_buffer : std_logic_vector(4 downto 0);
 
 begin
 
@@ -417,31 +436,81 @@ begin
 	end process;
 
 
-	-- Dummy thing to write through the RAM for now, so something is visible.
+	-- SPI interface
 
 	process(clk)
 	begin
 		if clk'event and clk = '1' then
 			framewrite_enable <= '0';
-			
-			framewrite_data <= framewrite_data(30 downto 0) & (framewrite_data(30) xor framewrite_data(29)); -- Random number generation
-			if framewrite_data = X"00000000" then
-				framewrite_data <= X"12345678";
-			end if;
-			
-			dummy_timer <= dummy_timer + 1;
-			if dummy_timer = 1000000 then
+	
+			address_toggle_buffer <= spi_address_toggle & address_toggle_buffer(4 downto 1);
+			data_toggle_buffer <= spi_data_toggle & data_toggle_buffer(4 downto 1);
+
+			if data_toggle_buffer(1) /= data_toggle_buffer(0) then
+				framewrite_data <= X"00" & spi_write_data;
 				framewrite_enable <= '1';
-				framewrite_addr <= framewrite_addr + 1;
-				-- debug framewrite_data <= X"0000" & std_logic_vector(framewrite_addr(6 downto 3)) & X"0" & std_logic_vector(framewrite_addr(7 downto 0) + 1);
-				dummy_timer <= (others => '0');
 			end if;
 
+			if framewrite_enable = '1' then
+				framewrite_addr <= framewrite_addr + 1; -- Advance address on the next cycle.
+			end if;
+
+			if address_toggle_buffer(1) /= address_toggle_buffer(0) then
+				framewrite_addr <= unsigned(spi_write_address(10 downto 0));
+			end if;
+
+			if syncreset = '1' then
+				address_toggle_buffer <= (others => '0');
+				data_toggle_buffer <= (others => '0');
+			end if;
 		end if;
 	end process;
 
-	-- SPI interface
+
+	spibits(0) <= flash_mosi;
+	flash_miso <= 'Z' when dbgio1 = '1' else spioutbyte(7);
 	
+	process(flash_clk)
+	begin
+		if dbgio1 = '1' then -- CS signal is inactive
+			spibit <= (others => '0');
+			spioutbyte <= (others => '0');
+			spimode <= command;
+			
+		elsif flash_clk'event and flash_clk = '1' then
+			spibits(31 downto 1) <= spibits(30 downto 0); -- Shift bits and prepare for next cycle.
+			spioutbyte <= spioutbyte(6 downto 0) & '0';
+			spibit <= spibit + 1;
+			case spimode is
+				when command =>
+					if spibit = 7 then
+						-- Decide what to do based on command in spibits(7 downto 0).
+						-- For now just treat all command bytes as a write data command.
+						spibit <= (others => '0');
+						spimode <= writeaddress;
+					end if;
+					
+				when writeaddress =>
+					if spibit = 15 then
+						spi_write_address <= spibits(15 downto 0);
+						spibit <= (others => '0');
+						spi_address_toggle <= not spi_address_toggle;
+						spimode <= writedata;
+					end if;
+					
+				when writedata =>
+					if spibit = 23 then
+						spi_write_data <= spibits(23 downto 0);
+						spibit <= (others => '0');
+						spi_data_toggle <= not spi_data_toggle;
+					end if;
+						
+				when others =>
+			end case;
+		
+		
+		end if;
+	end process;
 
 
 end Behavioral;

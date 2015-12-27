@@ -131,6 +131,31 @@ namespace SignTestInterface
             return VendorRequestIn(DeviceRequest.SpiFpga, 0, 0, (ushort)input.Length);
         }
 
+
+        public void SendImage32x32(int unit, uint[] ImageData)
+        {
+            // Currently only supporting the first 32x32 matrix.
+            if (unit != 0) return;
+
+            // Send one scanline at a time (99 bytes)
+            for (int y = 0; y < 32; y++)
+            {
+                byte[] scanline = new byte[99];
+                int address = y * 32;
+                if (y >= 16) address = (y + 16) * 32; // Early FPGA software issues.
+                scanline[1] = (byte)(address >> 8);
+                scanline[2] = (byte)(address & 0xFF);
+
+                for (int i = 0; i < 32; i++)
+                {
+                    scanline[3 + i * 3] = (byte)((ImageData[i + y * 32] >> 16) & 0xFF);
+                    scanline[3 + i * 3 + 1] = (byte)((ImageData[i + y * 32] >> 8) & 0xFF);
+                    scanline[3 + i * 3 + 2] = (byte)(ImageData[i + y * 32] & 0xFF);
+                }
+                FpgaSpi(scanline);
+            }
+        }
+
         void CheckAddress(int address, int alignment)
         {
             if ((address & (alignment - 1)) != 0)

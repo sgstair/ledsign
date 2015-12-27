@@ -458,11 +458,13 @@ namespace SignTestApp
                     break;
 
                 case TestState.BootFpga:
+                    NextState = TestState.WaitDeviceLeave;
                     try
                     {
                         Dev.SetMode(SignTest.DeviceMode.FpgaActive);
                         Dev.SetLed(true, false);
                         WriteText("Fpga Booted!");
+                        NextState = TestState.TestFpga;
                     }
                     catch(Exception ex)
                     {
@@ -470,11 +472,35 @@ namespace SignTestApp
                         Dev.SetLed(false, true);
                         WriteText(ex.ToString());
                     }
-                    NextState = TestState.WaitDeviceLeave;
                     break;
 
                 case TestState.TestFpga:
-                    WriteText("Nothing to do currently.");
+                    Thread.Sleep(1000);
+                    WriteText("Sending a test image.");
+                    {
+                        uint[] image = new uint[32 * 32];
+                        for (int y = 0; y < 32; y++)
+                        {
+                            for (int x = 0; x < 32; x++)
+                            {
+                                double angle = Math.Atan2(x - 16, 16-y) / (2 * Math.PI);
+                                double rad = Math.Sqrt((y - 16) * (y - 16) + (x - 16) * (x - 16));
+                                if (angle < 0) angle += 1;
+
+                                int a = (int)Math.Round(angle * 127);
+                                int r = (int)Math.Round(160 - rad * 8);
+                                int z = (x + y * 32) * 191 / (32 * 32);
+                                if (a < 0) a = 0;
+                                if (a > 255) a = 255;
+                                if (r < 0) r = 0;
+                                if (r > 255) r = 255;
+
+                                image[x + y * 32] = (uint)(a + r * 0x100 + z * 0x10000);
+
+                            }
+                        }
+                        Dev.SendImage32x32(0, image);
+                    }
                     NextState = TestState.WaitDeviceLeave;
                     break;
 

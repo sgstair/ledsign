@@ -206,8 +206,8 @@ void flash_csenable(int enable)
 // PIO3_2 (0) - DBGIO1, fpga
 void fpga_csenable(int enable) // Using DBGIO1 to control assertion.
 {
-	GPIO1DIR |= (1<<1);
-	GPIO1DATA[(1<<1)] = enable?0:(1<<1);
+	GPIO3DIR |= (1<<2);
+	GPIO3DATA[(1<<2)] = enable?0:(1<<2);
 }
 
 void SpiRelease()
