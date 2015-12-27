@@ -75,6 +75,7 @@
     <Compile Include="SignTargetConfigure.Designer.cs">
       <DependentUpon>SignTargetConfigure.cs</DependentUpon>
     </Compile>
+    <Compile Include="TargetTestBoard.cs" />
     <EmbeddedResource Include="ContentSimpleTextControl.resx">
       <DependentUpon>ContentSimpleTextControl.cs</DependentUpon>
     </EmbeddedResource>
@@ -108,6 +109,16 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\SignTestInterface\SignTestInterface\SignTestInterface.csproj">
+      <Project>{3b156a33-1fb5-4d55-99bb-f69036a5145f}</Project>
+      <Name>SignTestInterface</Name>
+    </ProjectReference>
+    <ProjectReference Include="..\..\winusbdotnet\winusbdotnet\winusbdotnet.csproj">
+      <Project>{f9fec76a-8120-4002-92c9-423a60dfd468}</Project>
+      <Name>winusbdotnet</Name>
+    </ProjectReference>
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <!-- To modify your build process, add your task inside one of the targets below and uncomment it. 

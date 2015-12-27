@@ -26,6 +26,7 @@ namespace SignControl
             Animate = new SignAnimate();
             Animate.FrameComplete += Animate_FrameComplete;
 
+            comboBox1.Items.Add("Test Board");
             comboBox1.Items.Add("Sign Preview");
             comboBox1.SelectedIndex = 0;
 
@@ -66,7 +67,22 @@ namespace SignControl
         private void button1_Click(object sender, EventArgs e)
         {
             // Adding a sign target
-            AddSignTarget(new SignPreview());
+            try
+            {
+                switch ((string)comboBox1.SelectedItem)
+                {
+                    case "Test Board":
+                        AddSignTarget(new TargetTestBoard());
+                        break;
+                    case "Sign Preview":
+                        AddSignTarget(new SignPreview());
+                        break;
+                }
+            }
+            catch(Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine("Error adding target: " + ex.ToString());
+            }
         }
 
         private void button2_Click(object sender, EventArgs e)
@@ -146,6 +162,8 @@ namespace SignControl
             {
                 if (Targets.Count == 0)
                     Animate.SetConfiguration(target.CurrentConfiguration());
+                else
+                    target.ApplyConfiguration(Targets[0].Target.CurrentConfiguration());
                     
                 Targets.Add(targetUI);
             }
