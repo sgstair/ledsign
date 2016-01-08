@@ -113,5 +113,25 @@ namespace SignControl
             SignGraphics.DrawString(text, f, new SolidBrush(c), x, y);
         }
 
+
+        public void PrepareBitmapBackground(ref Bitmap bgBmp)
+        {
+            if(bgBmp != null)
+            {
+                if(bgBmp.Width != SignOutput.Width || bgBmp.Height != SignOutput.Height)
+                {
+                    bgBmp = null;
+                }
+            }
+            if(bgBmp == null)
+            {
+                bgBmp = new Bitmap(SignOutput.Width, SignOutput.Height);
+            }
+        }
+
+        public void DrawBackground(Bitmap bgBmp)
+        {
+            SignGraphics.DrawImageUnscaled(bgBmp, 0, 0);
+        }
     }
 }

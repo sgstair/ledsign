@@ -52,23 +52,29 @@ namespace SignControl
         }
         public void SendImage(Bitmap signImage)
         {
-            SignConfiguration config = CurrentConfig;
-
-            // For each element in the configuration, render it.
-            for (int i = 0; i < config.Components.Length; i++ )
+            lock (this)
             {
-                SignComponent c = config.Components[i];
-                uint[] elementData = new uint[32 * 32];
-                
-                for(int y=0;y<32;y++)
-                {
-                    for(int x=0;x<32;x++)
-                    {
-                        elementData[x + y * 32] = (uint)signImage.GetPixel(x + c.X, y + c.Y).ToArgb();
-                    }
-                }
+                SignConfiguration config = CurrentConfig;
 
-                TestBoard.SendImage32x32(i, elementData);
+                // For each element in the configuration, render it.
+                for (int i = 0; i < config.Components.Length; i++)
+                {
+                    SignComponent c = config.Components[i];
+                    uint[] elementData = new uint[32 * 32];
+                    try
+                    {
+                        for (int y = 0; y < 32; y++)
+                        {
+                            for (int x = 0; x < 32; x++)
+                            {
+                                elementData[x + y * 32] = (uint)signImage.GetPixel(x + c.X, y + c.Y).ToArgb();
+                            }
+                        }
+
+                        TestBoard.SendImage32x32(i, elementData);
+                    }
+                    catch { } // Exceptions are generally due to configuration changes leading bitmap changes.
+                }
             }
         }
         public SignConfiguration CurrentConfiguration()

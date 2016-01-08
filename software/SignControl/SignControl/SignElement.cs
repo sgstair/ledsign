@@ -10,7 +10,26 @@ namespace SignControl
     public enum ElementAnimation
     {
         None,
-        ScrollLeft
+        ScrollLeft,
+
+    }
+
+    public class SignBackground
+    {
+        protected Bitmap Bmp;
+        protected Graphics g;
+        public void Render(SignRender r)
+        {
+            r.PrepareBitmapBackground(ref Bmp);
+            g = Graphics.FromImage(Bmp);
+            Render();
+            r.DrawBackground(Bmp);
+        }
+
+        public virtual void Render()
+        {
+            throw new Exception("Sign Background needs to implement render and not call the base.");
+        }
     }
 
     public class SignElement

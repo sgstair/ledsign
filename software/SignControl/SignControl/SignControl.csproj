@@ -51,6 +51,8 @@
     <Compile Include="ContentSimpleTextControl.Designer.cs">
       <DependentUpon>ContentSimpleTextControl.cs</DependentUpon>
     </Compile>
+    <Compile Include="GeneralBackgrounds.cs" />
+    <Compile Include="ReflectionHelper.cs" />
     <Compile Include="SignAnimate.cs" />
     <Compile Include="SignContentFactory.cs" />
     <Compile Include="SignControl.cs">
