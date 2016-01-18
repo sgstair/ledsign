@@ -1,3 +1,26 @@
+-- 
+-- This source is released under the MIT License (MIT)
+-- 
+-- Copyright (c) 2016 Stephen Stair
+-- 
+-- Permission is hereby granted, free of charge, to any person obtaining a copy
+-- of this software and associated documentation files (the "Software"), to deal
+-- in the Software without restriction, including without limitation the rights
+-- to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+-- copies of the Software, and to permit persons to whom the Software is
+-- furnished to do so, subject to the following conditions:
+-- 
+-- The above copyright notice and this permission notice shall be included in all
+-- copies or substantial portions of the Software.
+-- 
+-- THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+-- IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+-- FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+-- AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+-- LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+-- OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+-- SOFTWARE.
+-- 
 
 library IEEE;
 use IEEE.STD_LOGIC_1164.ALL;
@@ -32,6 +55,21 @@ entity main is
 	 );
 end main;
 architecture Behavioral of main is
+
+
+component framebuffer is
+    Generic ( RamSizeBits : integer := 14 );
+    Port ( clk : in  STD_LOGIC;
+			  reset : in  STD_LOGIC;
+			  frame_addr : in unsigned( (RamSizeBits-1) downto 0);
+			  frame_readdata : out std_logic_vector(31 downto 0);
+			  access_addr : in unsigned ( (RamSizeBits-1) downto 0);
+			  access_readdata : out std_logic_vector(31 downto 0);
+			  access_writedata : in std_logic_vector(31 downto 0);
+			  access_writeenable : in std_logic );
+end component;
+
+
 
 signal counter : unsigned(29 downto 0) := (others => '0');
 
@@ -68,16 +106,13 @@ signal led_state : led_state_type := startoutput;
 signal display_completed : std_logic := '0';
 
 
-signal frameread_addr : unsigned(10 downto 0);
+signal frameread_addr : unsigned(13 downto 0);
 signal frameread_data : std_logic_vector(31 downto 0);
 
-signal frameread_ram1 : std_logic_vector(31 downto 0);
-signal frameread_ram2 : std_logic_vector(31 downto 0);
-
-signal framewrite_enable :std_logic;
-signal framewrite_enables : std_logic_vector(1 downto 0);
-signal framewrite_addr : unsigned(10 downto 0);
-signal framewrite_data : std_logic_vector(31 downto 0);
+signal frameaccess_addr : unsigned(13 downto 0);
+signal frameaccess_readdata : std_logic_vector(31 downto 0);
+signal frameaccess_writedata : std_logic_vector(31 downto 0);
+signal frameaccess_writeenable :std_logic;
 
 signal pixel_delay : unsigned(1 downto 0);
 signal scanline_state : unsigned(2 downto 0);
@@ -103,110 +138,22 @@ signal data_toggle_buffer : std_logic_vector(4 downto 0);
 
 begin
 
-	frameread_data <= frameread_ram1 when frameread_addr(10) = '0' else
-							frameread_ram2;
 
-	framewrite_enables <= 	"00" when framewrite_enable = '0' else
-									"01" when framewrite_addr(10) = '0' else
-									"10";
-
-
-   ram1 : RAMB16BWER
-   generic map (
-      -- DATA_WIDTH_A/DATA_WIDTH_B: 0, 1, 2, 4, 9, 18, or 36
-      DATA_WIDTH_A => 36, DATA_WIDTH_B => 36,
-      -- DOA_REG/DOB_REG: Optional output register (0 or 1)
-      DOA_REG => 0, DOB_REG => 0,
-      -- EN_RSTRAM_A/EN_RSTRAM_B: Enable/disable RST
-      EN_RSTRAM_A => TRUE,
-      EN_RSTRAM_B => TRUE,
-      -- INIT_FILE: Optional file used to specify initial RAM contents
-      INIT_FILE => "NONE",
-      -- RSTTYPE: "SYNC" or "ASYNC" 
-      RSTTYPE => "SYNC",
-      -- RST_PRIORITY_A/RST_PRIORITY_B: "CE" or "SR" 
-      RST_PRIORITY_A => "CE",
-      RST_PRIORITY_B => "CE",
-      -- SIM_COLLISION_CHECK: Collision check enable "ALL", "WARNING_ONLY", "GENERATE_X_ONLY" or "NONE" 
-      SIM_COLLISION_CHECK => "ALL",
-      -- SIM_DEVICE: Must be set to "SPARTAN6" for proper simulation behavior
-      SIM_DEVICE => "SPARTAN3ADSP",
-      -- SRVAL_A/SRVAL_B: Set/Reset value for RAM output
-      SRVAL_A => X"000000000",
-      SRVAL_B => X"000000000",
-      -- WRITE_MODE_A/WRITE_MODE_B: "WRITE_FIRST", "READ_FIRST", or "NO_CHANGE" 
-      WRITE_MODE_A => "WRITE_FIRST",
-      WRITE_MODE_B => "WRITE_FIRST" 
-   )
-   port map (
-      DOA => frameread_ram1,  -- 32-bit output: A port data output
-      ADDRA => std_logic_vector(frameread_addr(8 downto 0)) & "00000", -- 14-bit input: A port address input
-      CLKA => clk,     			-- 1-bit input: A port clock input
-      ENA => '1',       		-- 1-bit input: A port enable input
-      REGCEA => '1', 			-- 1-bit input: A port register clock enable input
-      RSTA => syncreset,      -- 1-bit input: A port register set/reset input
-      WEA => "0000",       	-- 4-bit input: Port A byte-wide write enable input
-      DIA => (others => '0'), -- 32-bit input: A port data input
-      DIPA => (others => '0'),-- 4-bit input: A port parity input
-
-      ADDRB => std_logic_vector(framewrite_addr(8 downto 0)) & "00000", -- 14-bit input: B port address input
-      CLKB => clk,     			-- 1-bit input: B port clock input
-      ENB => '1',       		-- 1-bit input: B port enable input
-      REGCEB => '1', 			-- 1-bit input: B port register clock enable input
-      RSTB => syncreset,      -- 1-bit input: B port register set/reset input
-      WEB => (others => framewrite_enables(0)), -- 4-bit input: Port B byte-wide write enable input
-      DIB => framewrite_data, -- 32-bit input: B port data input
-      DIPB => (others => '0') -- 4-bit input: B port parity input
-   );
+	framebufferram: framebuffer
+	generic map ( RamSizeBits => 14 )
+	port map (
+		clk => clk,
+		reset => syncreset,
+		frame_addr => frameread_addr,
+		frame_readdata => frameread_data,
+		access_addr => frameaccess_addr,
+		access_readdata => frameaccess_readdata,
+		access_writedata => frameaccess_writedata,
+		access_writeenable => frameaccess_writeenable
+		);
 
 
-   ram2 : RAMB16BWER
-   generic map (
-      -- DATA_WIDTH_A/DATA_WIDTH_B: 0, 1, 2, 4, 9, 18, or 36
-      DATA_WIDTH_A => 36, DATA_WIDTH_B => 36,
-      -- DOA_REG/DOB_REG: Optional output register (0 or 1)
-      DOA_REG => 0, DOB_REG => 0,
-      -- EN_RSTRAM_A/EN_RSTRAM_B: Enable/disable RST
-      EN_RSTRAM_A => TRUE,
-      EN_RSTRAM_B => TRUE,
-      -- INIT_FILE: Optional file used to specify initial RAM contents
-      INIT_FILE => "NONE",
-      -- RSTTYPE: "SYNC" or "ASYNC" 
-      RSTTYPE => "SYNC",
-      -- RST_PRIORITY_A/RST_PRIORITY_B: "CE" or "SR" 
-      RST_PRIORITY_A => "CE",
-      RST_PRIORITY_B => "CE",
-      -- SIM_COLLISION_CHECK: Collision check enable "ALL", "WARNING_ONLY", "GENERATE_X_ONLY" or "NONE" 
-      SIM_COLLISION_CHECK => "ALL",
-      -- SIM_DEVICE: Must be set to "SPARTAN6" for proper simulation behavior
-      SIM_DEVICE => "SPARTAN3ADSP",
-      -- SRVAL_A/SRVAL_B: Set/Reset value for RAM output
-      SRVAL_A => X"000000000",
-      SRVAL_B => X"000000000",
-      -- WRITE_MODE_A/WRITE_MODE_B: "WRITE_FIRST", "READ_FIRST", or "NO_CHANGE" 
-      WRITE_MODE_A => "WRITE_FIRST",
-      WRITE_MODE_B => "WRITE_FIRST" 
-   )
-   port map (
-      DOA => frameread_ram2,  -- 32-bit output: A port data output
-      ADDRA => std_logic_vector(frameread_addr(8 downto 0)) & "00000", -- 14-bit input: A port address input
-      CLKA => clk,     			-- 1-bit input: A port clock input
-      ENA => '1',       		-- 1-bit input: A port enable input
-      REGCEA => '1', 			-- 1-bit input: A port register clock enable input
-      RSTA => syncreset,      -- 1-bit input: A port register set/reset input
-      WEA => "0000",       	-- 4-bit input: Port A byte-wide write enable input
-      DIA => (others => '0'), -- 32-bit input: A port data input
-      DIPA => (others => '0'),-- 4-bit input: A port parity input
 
-      ADDRB => std_logic_vector(framewrite_addr(8 downto 0)) & "00000", -- 14-bit input: B port address input
-      CLKB => clk,     			-- 1-bit input: B port clock input
-      ENB => '1',       		-- 1-bit input: B port enable input
-      REGCEB => '1', 			-- 1-bit input: B port register clock enable input
-      RSTB => syncreset,      -- 1-bit input: B port register set/reset input
-      WEB => (others => framewrite_enables(1)), -- 4-bit input: Port B byte-wide write enable input
-      DIB => framewrite_data, -- 32-bit input: B port data input
-      DIPB => (others => '0') -- 4-bit input: B port parity input
-   );
 
 	process(clk)
 	begin
@@ -236,7 +183,7 @@ begin
 				if scanline_working = '0' then
 					scanline_working <= '1';
 					-- Prepare to read data
-					frameread_addr <= "00" & scanline_y & "00000";
+					frameread_addr <= "00000" & scanline_y & "00000";
 					pixel_delay <= "00";
 				else
 					if scanline_complete = '0' then
@@ -441,22 +388,22 @@ begin
 	process(clk)
 	begin
 		if clk'event and clk = '1' then
-			framewrite_enable <= '0';
+			frameaccess_writeenable <= '0';
 	
 			address_toggle_buffer <= spi_address_toggle & address_toggle_buffer(4 downto 1);
 			data_toggle_buffer <= spi_data_toggle & data_toggle_buffer(4 downto 1);
 
 			if data_toggle_buffer(1) /= data_toggle_buffer(0) then
-				framewrite_data <= X"00" & spi_write_data;
-				framewrite_enable <= '1';
+				frameaccess_writedata <= X"00" & spi_write_data;
+				frameaccess_writeenable <= '1';
 			end if;
 
-			if framewrite_enable = '1' then
-				framewrite_addr <= framewrite_addr + 1; -- Advance address on the next cycle.
+			if frameaccess_writeenable = '1' then
+				frameaccess_addr <= frameaccess_addr + 1; -- Advance address on the next cycle.
 			end if;
 
 			if address_toggle_buffer(1) /= address_toggle_buffer(0) then
-				framewrite_addr <= unsigned(spi_write_address(10 downto 0));
+				frameaccess_addr <= unsigned(spi_write_address(13 downto 0));
 			end if;
 
 			if syncreset = '1' then

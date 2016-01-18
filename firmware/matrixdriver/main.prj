@@ -1,1 +1,2 @@
+vhdl work "framebuffer.vhd"
 vhdl work "main.vhd"
