@@ -1,7 +1,7 @@
 -- 
 -- This source is released under the MIT License (MIT)
 -- 
--- Copyright (c) 2016 Stephen Stair
+-- Copyright (c) 2016 Stephen Stair (sgstair@akkit.org)
 -- 
 -- Permission is hereby granted, free of charge, to any person obtaining a copy
 -- of this software and associated documentation files (the "Software"), to deal

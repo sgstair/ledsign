@@ -1,7 +1,7 @@
 -- 
 -- This source is released under the MIT License (MIT)
 -- 
--- Copyright (c) 2016 Stephen Stair
+-- Copyright (c) 2016 Stephen Stair (sgstair@akkit.org)
 -- 
 -- Permission is hereby granted, free of charge, to any person obtaining a copy
 -- of this software and associated documentation files (the "Software"), to deal
@@ -67,6 +67,18 @@ component framebuffer is
 			  access_readdata : out std_logic_vector(31 downto 0);
 			  access_writedata : in std_logic_vector(31 downto 0);
 			  access_writeenable : in std_logic );
+end component;
+
+component usb_device is
+    Port ( clk : in  STD_LOGIC;
+           usb_dp : inout  STD_LOGIC;
+           usb_dm : inout  STD_LOGIC;
+           syncreset : in  STD_LOGIC;
+           interface_addr : out unsigned(15 downto 0);
+			  interface_read : in std_logic_vector(31 downto 0);
+			  interface_write : out std_logic_vector(31 downto 0);
+			  interface_re : out std_logic;
+			  interface_we : out std_logic);
 end component;
 
 
