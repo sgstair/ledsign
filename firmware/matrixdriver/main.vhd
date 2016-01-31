@@ -51,7 +51,10 @@ entity main is
 		flash_clk : inout std_logic;
 		flash_mosi : inout std_logic;
 		flash_miso : inout std_logic;
-		dbgio1 : inout std_logic
+		dbgio1 : inout std_logic;
+		usb_dp : inout std_logic;
+		usb_dm : inout std_logic;
+		usb_connect : inout std_logic
 	 );
 end main;
 architecture Behavioral of main is
@@ -73,6 +76,7 @@ component usb_device is
     Port ( clk : in  STD_LOGIC;
            usb_dp : inout  STD_LOGIC;
            usb_dm : inout  STD_LOGIC;
+			  usb_connect : inout std_logic;			  
            syncreset : in  STD_LOGIC;
            interface_addr : out unsigned(15 downto 0);
 			  interface_read : in std_logic_vector(31 downto 0);
@@ -82,6 +86,11 @@ component usb_device is
 end component;
 
 
+signal usb_addr : unsigned(15 downto 0);
+signal usb_readdata : std_logic_vector(31 downto 0);
+signal usb_writedata : std_logic_vector(31 downto 0);
+signal usb_re : std_logic;
+signal usb_we : std_logic;
 
 signal counter : unsigned(29 downto 0) := (others => '0');
 
@@ -163,6 +172,20 @@ begin
 		access_writedata => frameaccess_writedata,
 		access_writeenable => frameaccess_writeenable
 		);
+
+	usb_device_inst : usb_device
+	port map (
+		clk => clk,
+		usb_dp => usb_dp,
+		usb_dm => usb_dm,
+		usb_connect => usb_connect,	  
+		syncreset => syncreset,
+		interface_addr => usb_addr,
+		interface_read => usb_readdata,
+		interface_write => usb_writedata,
+		interface_re => usb_re,
+		interface_we => usb_we
+	);
 
 
 

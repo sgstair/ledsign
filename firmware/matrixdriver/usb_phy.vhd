@@ -149,11 +149,6 @@ architecture a of usb_phy is
 	signal usbrxstate : usb_state;
 	signal usbtxstate : usb_state;
 
-
-	signal tracedata : std_logic_vector(31 downto 0);
-	signal tracelatch : std_logic;
-	signal tracebyte : unsigned(1 downto 0);
-
 begin
 
 	usbrx_packetend <= usbrx_ipacketend;
@@ -161,27 +156,8 @@ begin
 	usbrx_error <= usbrx_ierror;
 	usbtxs_cansend <= usbtxs_icansend;
 	
-	trace_usb <= tracedata;
-	tracelatch_usb <= tracelatch;
-	
 	usbrx_byte <= usbrxi_byte;
 	
-
-	logic_usblow(1 downto 0) <= usb_dp & usb_dm;
-	logic_usblow(3 downto 2) <= usbtx_lastbyte & usbtx_sendbyte;
-	logic_usblow(5 downto 4) <= usbrx_ipacketend & usbrx_inextbyte;
-	logic_usblow(7 downto 6) <= usbrxi_crcerror & usbrx_ierror;
-	logic_usblow(9 downto 8) <= usbi_crcenable & usbtxs_icansend;
-	logic_usblow(11 downto 10) <= "0" & usbi_rxcrcvalid;
-
-
-	-- USB Implementation, right myah for now.
-	
-
-
---	usb_dp : inout std_logic;
---	usb_dm : inout std_logic;
---	usb_connect : inout std_logic;
 
 
 	-- USB front end
@@ -324,76 +300,7 @@ begin
 			end if;
 		
 		end if;
-	end process;
-		
-		
-		
-	-- USB Tracing based on other signals in the system.
-	process(sysclk, rst)
-	begin
-		if rst = '1' then
-			tracedata <= (others => '0');
-			tracelatch <= '0';
-			tracebyte <= "01";
-		
-		elsif sysclk'event and sysclk = '1' then
-			tracelatch <= '0';
-			
-			tracedata(29) <= '0'; -- "CRC error" for receive.
-			tracedata(28) <= '0'; -- "error" for receive
-			tracedata(27) <= '0'; -- "Direction", 0=output (TX), 1=Input (RX)
-			tracedata(26) <= '0'; -- "Last byte" bit
-			tracedata(25 downto 24) <= std_logic_vector(tracebyte); -- "Count of valid trace bytes in packet"
-		
-			if usbtx_sendbyte = '1' then
-				-- byte was transmitted.
-				tracedata(23 downto 0) <= tracedata(15 downto 0) & usbtx_byte;
-				
-				if usbtx_lastbyte = '1' then
-					-- Last byte in transmission, reset.
-					tracelatch <= '1';
-					tracebyte <= "01";
-					tracedata(26) <= '1';
-					
-				elsif tracebyte = "11" then
-					-- Last byte that will fit. Flag and reset
-					tracelatch <= '1';
-					tracebyte <= "01";
-					
-				else
-					-- Just accumulate the byte in the buffer.
-					tracebyte <= tracebyte + 1;
-				end if;
-			
-			elsif usbrx_inextbyte = '1' then
-				tracedata(23 downto 0) <= tracedata(15 downto 0) & usbrxi_byte;
-				
-				if usbrx_ipacketend = '1' then
-					-- Last byte received
-					tracelatch <= '1';
-					tracebyte <= "01";
-					tracedata(26) <= '1';
-					tracedata(27) <= '1'; -- Direction
-					
-					tracedata(28) <= usbrx_ierror;
-					tracedata(29) <= usbrxi_crcerror;
-					
-				elsif tracebyte = "11" then
-					-- Last byte that fits.
-					tracelatch <= '1';
-					tracebyte <= "01";
-					tracedata(27) <= '1'; -- Direction
-
-				else
-					tracebyte <= tracebyte + 1;
-				end if;
-			end if;
-			
-
-		end if;	
-	end process;
-		
-		
+	end process;		
 		
 	usbtxs_sending <= usbi_txactive;
 	usbtxs_icansend <= ((not usbi_txactive) or ((not usbi_bytebuffered) and (not usbi_receivedlastbyte))) and (not usbi_rxactive);
