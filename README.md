@@ -12,7 +12,6 @@ Planned modules include stock market, weather, time, arbitrary json content extr
 * Once HW is completely verified, will revise to fix errors and post updated PCB designs.
 
 # Next few work items, in no particular order
-* Restructure BRAM use in FPGA and increase size to allow multiple panels
 * Configuration for number of panels being used
 * Gamma lookup table in FPGA for better color precision
 * Add 32x16 panel scanning mode (probably allow only 32x16 panels to be used in this mode)
