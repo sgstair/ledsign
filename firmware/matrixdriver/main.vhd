@@ -189,11 +189,11 @@ begin
 
 
 
+	fpgaled <= '0';
 
 	process(clk)
 	begin
 		if clk'event and clk = '1' then
-			fpgaled <= counter(25);
 			counter <= counter + 1;
 			
 			-- Generate reset

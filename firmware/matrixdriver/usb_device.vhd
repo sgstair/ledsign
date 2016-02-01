@@ -119,7 +119,7 @@ signal ramreadaddr : unsigned(9 downto 0);
 signal ramreaddata : std_logic_vector(7 downto 0);
 
 
-type usb_state_type is (idle, ignore, setup1, setup2, out1, out2, in1, in2, setupdata, senddelay, sendstart, preoutdata, outdata, indata, indone);
+type usb_state_type is (idle, ignore, ignoreack, setup1, setup2, out1, out2, in1, in2, setupdata, senddelay, sendstart, preoutdata, outdata, indata, indone, sendack, sendstall);
 type usb_setup_data_type is (invalid, sendzlp, sendzlpaddress, sendconfig, senddescriptor, continuedescriptor, recvvendor, sendvendor);
 signal usb_state : usb_state_type; 
 signal usb_setup_data : usb_setup_data_type;
@@ -147,7 +147,7 @@ signal usb_descriptorloc : unsigned(9 downto 0);
 
 signal usb_completeonack : std_logic;
 signal usb_advanceonack : std_logic;
-
+signal usb_zlp_ack : std_logic;
 
 signal usb_need_addr : unsigned(15 downto 0);
 signal internal_addr : unsigned(15 downto 0);
@@ -182,6 +182,9 @@ begin
 		end if;
 	end process;
 
+
+	ramwriteenable <= '0';
+	ramwritedata <= (others => '0');
 
 
 -- USB State machine; 
@@ -218,32 +221,46 @@ begin
 						end if;
 					when "1101" => -- SETUP
 						usb_recvdata <= '0';
+						usb_zlp_ack <= '0';
 						if usbrx_packetend = '0' then
 							usb_state <= setup1;
 						end if;
 					when "0011" => -- DATA0
-						if usb_recvdata = '1' and usb_recvdataindex = '0' then
-							if usb_recvdatasetup = '1' then
-								if usbrx_packetend = '0' then
-									usb_state <= setupdata;
+						if usb_recvdata = '1' then
+							if usb_recvdataindex = '0' then
+								if usb_recvdatasetup = '1' then
+									if usbrx_packetend = '0' then
+										usb_state <= setupdata;
+									end if;
+								else
+									if usbrx_packetend = '1' then
+										usb_state <= indone;
+									else
+										usb_state <= indata;
+									end if;
 								end if;
 							else
-								if usbrx_packetend = '1' then
-									usb_state <= indone;
-								else
-									usb_state <= indata;
-								end if;
+								-- Wrong data, but we were expecting data. Assume the sender did not get our ACK, and ACK again.
+								-- Todo: flag to tell when we have previously ACK'd something so we prevent acking blind.
+								usb_state <= ignoreack;
 							end if;
+							
 						end if;
 						
 					when "1011" => -- DATA1
-						if usb_recvdata = '1' and usb_recvdataindex = '1' then
-							if usb_recvdatasetup = '0' then -- should always be 0
-								if usbrx_packetend = '1' then
-									usb_state <= indone;
-								else
-									usb_state <= indata;
+						if usb_recvdata = '1' then
+							if usb_recvdataindex = '1' then
+								if usb_recvdatasetup = '0' then -- should always be 0
+									if usbrx_packetend = '1' then
+										usb_state <= indone;
+									else
+										usb_state <= indata;
+									end if;
 								end if;
+							else
+								-- Wrong data, but we were expecting data. Assume the sender did not get our ACK, and ACK again.
+								-- Todo: flag to tell when we have previously ACK'd something so we prevent acking blind.
+								usb_state <= ignoreack;
 							end if;
 						end if;
 						
@@ -272,74 +289,95 @@ begin
 				if usbrx_packetend = '1' then
 					usb_state <= idle;
 				end if;
+				
+			when ignoreack =>
+				if usbrx_packetend = '1' then
+					usb_state <= sendack;
+					usb_recvdataindex <= not usb_recvdataindex; -- Flip this bit once so the ack will flip it back to what it was originally.
+				end if;				
+				
 			when setup1 =>
 				if usbrx_nextbyte = '1' then
-					if usb_address = usbrx_byte(7 downto 1) then
+					if usb_address = usbrx_byte(6 downto 0) then
 						usb_state <= setup2;
 					else
 						usb_state <= idle;
 					end if;
-					usb_endp(3) <= usbrx_byte(0);
+					usb_endp(0) <= usbrx_byte(7);
 					if usbrx_packetend = '1' then
 						usb_state <= idle;
 					end if;
 				end if;
 			when setup2 =>
 				if usbrx_nextbyte = '1' then
-					usb_endp(2 downto 0) <= unsigned(usbrx_byte(7 downto 5));
+					if usbrx_packetend = '1' then
+						usb_state <= idle;
+					else
+						usb_state <= ignore;
+					end if;
+					
+					usb_endp(3 downto 1) <= unsigned(usbrx_byte(2 downto 0));
 					
 					if usbrx_packetend = '1' and usbrx_error = '0' then
 						usb_recvdata <= '1';
 						usb_recvdatasetup <= '1';
 						usb_recvdataindex <= '0';
 					end if;
-					usb_state <= idle;
 				end if;
 				
 			when in1 => -- Data to host
 				if usbrx_nextbyte = '1' then
-					if usb_address = usbrx_byte(7 downto 1) then
+					if usb_address = usbrx_byte(6 downto 0) then
 						usb_state <= in2;
 					else
 						usb_state <= idle;
 					end if;
-					usb_endp(3) <= usbrx_byte(0);
+					usb_endp(0) <= usbrx_byte(7);
 					if usbrx_packetend = '1' then
 						usb_state <= idle;
 					end if;
 				end if;
 			when in2 =>
 				if usbrx_nextbyte = '1' then
-					usb_endp(2 downto 0) <= unsigned(usbrx_byte(7 downto 5));
+					if usbrx_packetend = '1' then
+						usb_state <= idle;
+					else
+						usb_state <= ignore;
+					end if;
+
+					usb_endp(3 downto 1) <= unsigned(usbrx_byte(2 downto 0));
 					
 					if usbrx_packetend = '1' and usbrx_error = '0' then
 						usb_state <= senddelay;						
 					end if;
-					usb_state <= idle;
 				end if;
 				
 			when out1 => -- Data from host
 				if usbrx_nextbyte = '1' then
-					if usb_address = usbrx_byte(7 downto 1) then
-						usb_state <= in2;
+					if usb_address = usbrx_byte(6 downto 0) then
+						usb_state <= out2;
 					else
 						usb_state <= idle;
 					end if;
-					usb_endp(3) <= usbrx_byte(0);
+					usb_endp(0) <= usbrx_byte(7);
 					if usbrx_packetend = '1' then
 						usb_state <= idle;
 					end if;
 				end if;
 			when out2 =>
 				if usbrx_nextbyte = '1' then
-					usb_endp(2 downto 0) <= unsigned(usbrx_byte(7 downto 5));
+					if usbrx_packetend = '1' then
+						usb_state <= idle;
+					else
+						usb_state <= ignore;
+					end if;				
+				
+					usb_endp(3 downto 1) <= unsigned(usbrx_byte(2 downto 0));
 					
 					if usbrx_packetend = '1' and usbrx_error = '0' then
 						usb_recvdata <= '1';
 						usb_recvdatasetup <= '0';
-						
 					end if;
-					usb_state <= idle;
 				end if;
 			
 			when setupdata =>
@@ -349,26 +387,33 @@ begin
 						usb_state <= idle;
 					end if;
 					usb_setup_data <= invalid;
-					
+					usb_byteindex <= usb_byteindex + 1;
 					case to_integer(usb_byteindex) is
 						when 0 =>
 							usb_requesttype <= usbrx_byte;
 						when 1 =>
 							usb_request <= usbrx_byte;
 						when 2 =>
-							usb_wValue(15 downto 8) <= usbrx_byte;
-						when 3 =>
 							usb_wValue(7 downto 0) <= usbrx_byte;
+						when 3 =>
+							usb_wValue(15 downto 8) <= usbrx_byte;
 						when 4 =>
-							usb_wIndex(15 downto 8) <= usbrx_byte;
-						when 5 =>
 							usb_wIndex(7 downto 0) <= usbrx_byte;
+						when 5 =>
+							usb_wIndex(15 downto 8) <= usbrx_byte;
 						when 6 =>
-							usb_wLength(15 downto 8) <= unsigned(usbrx_byte);
-						when 7 =>
 							usb_wLength(7 downto 0) <= unsigned(usbrx_byte);
+						when 7 =>
+							usb_wLength(15 downto 8) <= unsigned(usbrx_byte);
 							
-							if usbrx_error = '0' then
+							if usbrx_packetend = '0' then
+								usb_state <= ignore;
+							end if;
+							
+							if usbrx_error = '0' and usbrx_packetend = '1' then
+							
+								usb_state <= sendack;
+							
 								if usb_requesttype(6 downto 5) = "00" then -- Standard requests
 									case usb_request is
 									when X"05" => -- SET_ADDRESS
@@ -384,6 +429,7 @@ begin
 											when X"02" => -- Configuration descriptor
 												usb_setup_data <= senddescriptor;
 												usb_loaddescriptorindex <= X"1";
+												
 											when X"03" => -- String descriptor
 												case usb_wValue(7 downto 0) is
 													when X"00" => -- Language ID list
@@ -438,7 +484,7 @@ begin
 							end if;
 						when others =>
 					end case;
-					usb_byteindex <= usb_byteindex + 1;
+					
 				end if;
 				
 				
@@ -509,7 +555,7 @@ begin
 							usb_state <= outdata;
 							usb_setup_data <= continuedescriptor;
 							usb_byteindex <= (others => '0');
-							
+						when others =>
 					end case;
 				
 				when others =>
@@ -528,39 +574,82 @@ begin
 					when sendconfig =>
 						usbtx_byte <= usb_configuration;
 						usbtx_lastbyte <= '1';
-					
+						usb_zlp_ack <= '1';
+						usb_state <= idle;
+						
 					when continuedescriptor =>
 						usbtx_byte <= romdata;
 						romaddr <= romaddr + 1;
-						
-					
+	
 						if usb_byteindex = 63 then
 							usbtx_lastbyte <= '1';
 							usb_completeonack <= '1';
+							usb_zlp_ack <= '1';
+							usb_state <= idle;
+							
 						elsif (usb_byteindex + 1) = usb_descriptorlength then
 							usbtx_lastbyte <= '1';
 							usb_advanceonack <= '1';
+							usb_state <= idle;
+							
 						end if;	
 
-						
-					
 					when others =>
 						-- Don't know how to proceed.
 						usbtx_byte <= X"EE";
 						usbtx_lastbyte <= '1';
+						usb_state <= idle;
 					end case;
 				end if;
+				
 				if usbtxs_abort = '1' then
 					usb_state <= idle;
 					usb_setup_data <= invalid;
 				end if;
 
 			when indata =>
-
+				if usbrx_nextbyte = '1' then
+					if usbrx_packetend = '1' then
+						usb_state <= indone;
+					end if;
+					usb_byteindex <= usb_byteindex + 1;
+				end if;
+						
 			when indone =>
 				-- We were sent a packet that we accepted and now we respond with ack/nak/stall
-				
+				usb_zlp_ack <= '0';
+				usb_byteindex <= (others => '0');
+				usb_state <= sendstall;
+				if usb_byteindex = 0 then
+					if usb_zlp_ack = '1' then
+						usb_state <= sendack;
+					end if;
+				end if;
 			
+			when sendack =>
+				usb_byteindex <= usb_byteindex + 1;
+				if usb_byteindex = 15 then
+					usb_byteindex <= usb_byteindex;
+					if usbtxs_cansend = '1' then
+						usbtx_sendbyte <= '1';
+						usbtx_lastbyte <= '1';
+						usbtx_byte <= X"D2"; -- ACK
+						usb_state <= idle;
+						usb_recvdataindex <= not usb_recvdataindex; -- Advance DATA0/DATA1 index on successful receipt.
+					end if;
+				end if;
+
+			when sendstall =>
+				usb_byteindex <= usb_byteindex + 1;
+				if usb_byteindex = 15 then
+					usb_byteindex <= usb_byteindex;
+					if usbtxs_cansend = '1' then
+						usbtx_sendbyte <= '1';
+						usbtx_lastbyte <= '1';
+						usbtx_byte <= X"1E"; -- STALL
+						usb_state <= idle;
+					end if;
+				end if;
 			
 			when others =>
 				usb_state <= idle;
@@ -666,6 +755,7 @@ begin
    port map (
       -- Port A Data: 16-bit (each) output: Port A data
       DOADO(7 downto 0) => romdata,             -- 16-bit output: A port data/LSB data output
+		DOADO(15 downto 8) => OPEN,
       ADDRAWRADDR => std_logic_vector(romaddr) & "000", -- 13-bit input: A port address/Write address input
       CLKAWRCLK => clk,     -- 1-bit input: A port clock/Write clock input
       ENAWREN => ramwriteenable,         -- 1-bit input: A port enable/Write enable input
@@ -678,6 +768,7 @@ begin
       -- Port B Address/Control Signals: 13-bit (each) input: Port B address and control signals (read port
       -- when RAM_MODE="SDP")
       DOBDO(7 downto 0) => ramreaddata,             -- 16-bit output: B port data/LSB data output
+		DOBDO(15 downto 8) => OPEN,
       ADDRBRDADDR => std_logic_vector(ramreadaddr) & "000", -- 13-bit input: B port address/Read address input
       CLKBRDCLK => '0',     -- 1-bit input: B port clock/Read clock input
       ENBRDEN => '0',         -- 1-bit input: B port enable/Read enable input
