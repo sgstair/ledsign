@@ -82,7 +82,19 @@ component usb_device is
 			  interface_read : in std_logic_vector(31 downto 0);
 			  interface_write : out std_logic_vector(31 downto 0);
 			  interface_re : out std_logic;
-			  interface_we : out std_logic);
+			  interface_we : out std_logic;
+			  trace_byte : out std_logic_vector(7 downto 0);
+			  trace_pulse : out std_logic);
+end component;
+
+component tracefifo is
+    Port ( clk : in  STD_LOGIC;
+			  reset : in  STD_LOGIC;
+			  write_data : in std_logic_vector(7 downto 0);
+			  write_pulse : in std_logic;
+			  read_data : out std_logic_vector(7 downto 0);
+			  has_data : out std_logic;
+			  read_pulse : in std_logic );
 end component;
 
 
@@ -153,9 +165,19 @@ signal spi_write_data : std_logic_vector(23 downto 0);
 
 signal spi_address_toggle : std_logic;
 signal spi_data_toggle : std_logic;
+signal spi_trace_toggle : std_logic;
 
 signal address_toggle_buffer : std_logic_vector(4 downto 0);
 signal data_toggle_buffer : std_logic_vector(4 downto 0);
+signal trace_toggle_buffer : std_logic_vector(4 downto 0);
+
+
+
+signal trace_write : std_logic_vector(7 downto 0);
+signal trace_read : std_logic_vector(7 downto 0);
+signal trace_write_pulse : std_logic;
+signal trace_read_pulse : std_logic;
+signal trace_has_data : std_logic;
 
 begin
 
@@ -184,10 +206,21 @@ begin
 		interface_read => usb_readdata,
 		interface_write => usb_writedata,
 		interface_re => usb_re,
-		interface_we => usb_we
+		interface_we => usb_we,
+		trace_byte => trace_write,
+		trace_pulse => trace_write_pulse
 	);
 
-
+	traceblock : tracefifo
+   Port map ( 
+		clk => clk,
+		reset => syncreset,
+		write_data => trace_write,
+		write_pulse => trace_write_pulse,
+		read_data => trace_read,
+		has_data => trace_has_data,
+		read_pulse => trace_read_pulse
+	);
 
 	fpgaled <= '0';
 
@@ -424,9 +457,15 @@ begin
 	begin
 		if clk'event and clk = '1' then
 			frameaccess_writeenable <= '0';
+			trace_read_pulse <= '0';
 	
 			address_toggle_buffer <= spi_address_toggle & address_toggle_buffer(4 downto 1);
 			data_toggle_buffer <= spi_data_toggle & data_toggle_buffer(4 downto 1);
+			trace_toggle_buffer <= spi_trace_toggle & trace_toggle_buffer(4 downto 1);
+
+			if trace_toggle_buffer(1) /= trace_toggle_buffer(0) then
+				trace_read_pulse <= '1';
+			end if;
 
 			if data_toggle_buffer(1) /= data_toggle_buffer(0) then
 				frameaccess_writedata <= X"00" & spi_write_data;
@@ -489,7 +528,11 @@ begin
 						
 				when others =>
 			end case;
-		
+			
+			if spibit(2 downto 0) = 7 then
+				spi_trace_toggle <= not spi_trace_toggle;
+				spioutbyte <= trace_read;
+			end if;
 		
 		end if;
 	end process;

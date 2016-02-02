@@ -1,4 +1,5 @@
 vhdl work "usb_phy.vhd"
 vhdl work "usb_device.vhd"
+vhdl work "tracefifo.vhd"
 vhdl work "framebuffer.vhd"
 vhdl work "main.vhd"

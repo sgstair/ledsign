@@ -475,7 +475,14 @@ namespace SignTestApp
                     break;
 
                 case TestState.TestFpga:
-                    Thread.Sleep(1000);
+                    Thread.Sleep(5000);
+                    WriteText("Collecting some debug data from the FPGA");
+                    for (int i = 0; i < 2; i++)
+                    {
+                        byte[] data = Dev.FpgaSpi(new byte[64]);
+                        HexDump(0, data);
+                    }
+
                     WriteText("Sending a test image.");
                     {
                         uint[] image = new uint[32 * 32];

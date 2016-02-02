@@ -44,7 +44,9 @@ entity usb_device is
 			  interface_read : in std_logic_vector(31 downto 0);
 			  interface_write : out std_logic_vector(31 downto 0);
 			  interface_re : out std_logic; -- Request read; Data will be present on the 2nd cycle after re was high
-			  interface_we : out std_logic -- Request write; address/write data will be latched and written.
+			  interface_we : out std_logic; -- Request write; address/write data will be latched and written.
+			  trace_byte : out std_logic_vector(7 downto 0);
+			  trace_pulse : out std_logic
 			  );
 end usb_device;
 
@@ -160,7 +162,7 @@ signal internal_state : internal_state_type;
 begin
 
 	usb_connect <= '1';
-	usb_hold_reset <= '0';
+	usb_hold_reset <= usb_reset or syncreset;
 
 	interface_addr <= usb_need_addr when internal_state = idle else internal_addr;
 
@@ -194,6 +196,17 @@ begin
 			usbtx_sendbyte <= '0';
 			usbtx_lastbyte <= '0';
 			usbtx_byte <= (others => '0');
+			trace_pulse <= '0';
+			
+			if usbrx_nextbyte = '1' then
+				trace_pulse <= '1';
+				trace_byte <= usbrx_byte;
+			end if;
+			if usbtx_sendbyte = '1' then
+				trace_pulse <= '1';
+				trace_byte <= usbtx_byte;
+			end if;
+			
 			
 			case usb_state is
 			when idle =>
@@ -234,7 +247,7 @@ begin
 									end if;
 								else
 									if usbrx_packetend = '1' then
-										usb_state <= indone;
+										usb_state <= idle;
 									else
 										usb_state <= indata;
 									end if;
@@ -252,7 +265,7 @@ begin
 							if usb_recvdataindex = '1' then
 								if usb_recvdatasetup = '0' then -- should always be 0
 									if usbrx_packetend = '1' then
-										usb_state <= indone;
+										usb_state <= idle;
 									else
 										usb_state <= indata;
 									end if;
@@ -405,7 +418,8 @@ begin
 							usb_wLength(7 downto 0) <= unsigned(usbrx_byte);
 						when 7 =>
 							usb_wLength(15 downto 8) <= unsigned(usbrx_byte);
-							
+						when 8 => -- CRC16 is included.
+						when 9 => 
 							if usbrx_packetend = '0' then
 								usb_state <= ignore;
 							end if;
@@ -609,10 +623,11 @@ begin
 
 			when indata =>
 				if usbrx_nextbyte = '1' then
+					usb_byteindex <= usb_byteindex + 1;
 					if usbrx_packetend = '1' then
+						usb_byteindex <= usb_byteindex - 1; -- Packet includes two trailing bytes for CRC16.
 						usb_state <= indone;
 					end if;
-					usb_byteindex <= usb_byteindex + 1;
 				end if;
 						
 			when indone =>
