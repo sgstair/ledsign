@@ -365,8 +365,9 @@ if($outformat -eq "xilinx_bram")
   while($cursor -lt $blocksize)
   {
     $row = $outblock[$cursor..($cursor+31)];
+    [array]::Reverse($row);
     $rowhex = ($row | foreach {$_.ToString('x2')}) -join "";
-    $rowstring = 'INIT_{0:x2} => X"{1}",' -f $loc, $rowhex;
+    $rowstring = 'INIT_{0:X2} => X"{1}",' -f $loc, $rowhex;
     $outstrings += @($rowstring);
     
     $cursor += 32;
