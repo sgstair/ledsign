@@ -1,6 +1,7 @@
 # LED Sign Project
 
-Excitement! The v1 hardware has been verified (With many fixes) and v1a PCBs have been uploaded and ordered!
+Excitement! v1a hardware has been assembled and is working correctly - Next work is to get the USB Device functionality working and then it will be on to more fancy software features!
+
 Interested in seeing more about this project?
 * [Youtube channel](https://www.youtube.com/channel/UCL318dWu4VFWcpn52NUiHRw) - More videos about this project will be posted here over time
   * [LED Sign Project update #1](https://www.youtube.com/watch?v=U8zUCaXqkEE)
@@ -20,7 +21,7 @@ Planned modules include stock market, weather, time, arbitrary json content extr
 * Software to draw and animate a basic sign made of a bunch of elements is basic, but usable.
 * Test board firmware and host side control software working quite well
 * FPGA drives LED panel as framebuffer, software can write data via test board currently.
-* Updated and uploaded PCBs - Ordered the rev1a PCBs but not tested yet.
+* Updated and uploaded PCBs - Ordered the rev1a PCBs, assembled, and they've been tested and are working.
 
 ## Next few work items, in no particular order
 * Configuration for number of panels being used
