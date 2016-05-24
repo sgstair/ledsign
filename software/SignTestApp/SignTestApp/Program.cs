@@ -213,6 +213,160 @@ namespace SignTestApp
             }
         }
 
+        void HexOnly(byte[] data)
+        {
+            const int rowSize = 32;
+            int offset = 0;
+            while (offset < data.Length)
+            {
+                byte[] row = data.Skip(offset).Take(rowSize).ToArray();
+                string row1 = string.Join(" ", row.Select(b => b.ToString("x2")));
+                if (row.Length < rowSize) row1 += new string(' ', (rowSize - row.Length) * 3);
+                WriteText("{0}", row1);
+                offset += rowSize;
+            }
+        }
+
+
+        uint[] crc16table = null;
+        uint[] UsbCrc16Table()
+        {
+            if (crc16table == null)
+            {
+                crc16table = new uint[256];
+                uint generator = 0x18005;
+                for (int i = 0; i < 256; i++)
+                {
+                    uint n = (uint)i << 8;
+                    for (int bit = 0; bit < 8; bit++)
+                    {
+                        n = n << 1;
+                        if ((n & 0x10000) != 0)
+                        {
+                            n ^= generator;
+                        }
+                    }
+                    crc16table[i] = n;
+                }
+            }
+            return crc16table;
+        }
+
+        int bitreverse(int bytevalue)
+        {
+            bytevalue = ((bytevalue & 0xF0) >> 4) | ((bytevalue & 0x0F) << 4);
+            bytevalue = ((bytevalue & 0xCC) >> 2) | ((bytevalue & 0x33) << 2);
+            bytevalue = ((bytevalue & 0xAA) >> 1) | ((bytevalue & 0x55) << 1);
+            return bytevalue;
+        }
+        void PrintUsbHandshake(int cmd, string name)
+        {
+            WriteText("{0:x2} {1}", cmd, name);
+        }
+        void PrintUsbSoF(int cmd, MemoryStream bytes)
+        {
+            int cmd2 = bytes.ReadByte();
+            int cmd3 = bytes.ReadByte();
+            int frame = cmd2 | ((cmd3 & 0x7) << 8);
+            WriteText("{0:x2} {1:x2} {2:x2} SOF Frame:{3}", cmd, cmd2, cmd3, frame);
+        }
+        void PrintUsbToken(int cmd, string name, MemoryStream bytes)
+        {
+            int cmd2 = bytes.ReadByte();
+            int cmd3 = bytes.ReadByte();
+            int address = cmd2 & 0x7F;
+            int endpoint = (cmd2 >> 7) | ((cmd3 & 0x7) << 1);
+            WriteText("{0:x2} {1:x2} {2:x2} {3} Address:{4} Endpoint:{5}", cmd, cmd2, cmd3, name, address, endpoint);
+        }
+        void PrintUsbData(int cmd, string name, MemoryStream bytes)
+        {
+            // The trace doesn't really have any data to make correct framing decisions with, so read bytes until we get a valid packet CRC16.
+            List<byte> packetBytes = new List<byte>();
+            uint crc16 = 0xFFFF;
+            uint residue = 0x800D;
+            uint[] table = UsbCrc16Table();
+            for (int i = 0; i < 66; i++)
+            {
+                int b = bytes.ReadByte();
+                if (b == -1)
+                {
+                    break;
+                }
+                packetBytes.Add((byte)b);
+                crc16 = ((crc16 << 8) ^ table[(crc16 >> 8) ^ bitreverse(b)]) & 0xFFFF;
+                if (crc16 == residue)
+                {
+                    break;
+                }
+            }
+            if(packetBytes.Count == 66)
+            {
+                // We really have no idea where this packet ended (it was sent)
+                bytes.Position -= 66;
+                // Just skip bytes until we find something resembling a command. It might not be, though.
+                for (int i = 0; i < 66; i++)
+                {
+                    int cmd2 = bytes.ReadByte();
+                    if (((cmd2 >> 4) ^ 0x0F) != (cmd2 & 0x0f))
+                    {
+                        continue;
+                    }
+                    // This looks like a command.
+                    bytes.Position--;
+                    break;
+                }
+            }
+
+            string databytes = "";
+            string crcbytes = "no data";
+            if (packetBytes.Count >= 2)
+            {
+                databytes = string.Join(" ", packetBytes.Take(packetBytes.Count - 2).Select(b => b.ToString("x2")));
+                crcbytes = string.Join(" ", packetBytes.Skip(packetBytes.Count - 2).Select(b => b.ToString("x2")));
+            }
+
+            WriteText("{0:x2} {1} - {2} ({3})", cmd, name, databytes, crcbytes);
+        }
+
+        void DecodeUsbTrace(byte[] usbdata)
+        {
+            // Hacky decode of the USB trace to make it easier to diagnose what's going on.
+            MemoryStream ms = new MemoryStream(usbdata);
+            while (ms.Position < ms.Length)
+            {
+                int cmd = ms.ReadByte();
+                if (((cmd >> 4) ^ 0x0F) != (cmd & 0x0f))
+                {
+                    PrintUsbHandshake(cmd, "Unexpected");
+                    continue;
+                }
+
+                switch (cmd & 0x0F)
+                {
+                    case 1: PrintUsbToken(cmd, "OUT", ms); break;
+                    case 9: PrintUsbToken(cmd, "IN", ms); break;
+                    case 5: PrintUsbSoF(cmd, ms); break;
+                    case 13: PrintUsbToken(cmd, "SETUP", ms); break;
+
+                    case 3: PrintUsbData(cmd, "DATA0", ms); break;
+                    case 11: PrintUsbData(cmd, "DATA1", ms); break;
+                    case 7: PrintUsbData(cmd, "DATA2", ms); break;
+                    case 15: PrintUsbData(cmd, "MDATA", ms); break;
+
+                    case 2: PrintUsbHandshake(cmd, "ACK"); break;
+                    case 10: PrintUsbHandshake(cmd, "NAK"); break;
+                    case 14: PrintUsbHandshake(cmd, "STALL"); break;
+                    case 6: PrintUsbHandshake(cmd, "NYET"); break;
+
+                    default:
+                        PrintUsbHandshake(cmd, "Unexpected");
+                        break;
+                }
+
+            }
+
+        }
+
 
         delegate bool SignStable(SignTestStatus status);
         bool IsStable(SignStable test, int count = StableCount)
@@ -477,11 +631,16 @@ namespace SignTestApp
                 case TestState.TestFpga:
                     Thread.Sleep(5000);
                     WriteText("Collecting some debug data from the FPGA");
-                    for (int i = 0; i < 2; i++)
+                    int buffercount = 32;
+                    byte[] usbdata = new byte[64 * buffercount];
+                    for (int i = 0; i < buffercount; i++)
                     {
                         byte[] data = Dev.FpgaSpi(new byte[64]);
-                        HexDump(0, data);
+                        Array.Copy(data, 0, usbdata, i * 64, 64);
                     }
+
+                    HexOnly(usbdata);
+                    DecodeUsbTrace(usbdata);
 
                     WriteText("Sending a test image.");
                     {

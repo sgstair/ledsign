@@ -66,9 +66,9 @@ typedef unsigned long u32;
 // (DBGIO - Extra IO pins wired to the fpga)
 // PIO3_2 (0) - DBGIO1, fpga
 // PIO1_11 (0D) - DBGIO2, fpga
-// PIO1_4 (0D) - DBGIO3, fpga
-// PIO1_3 (1D) - DBGIO4, fpga pin (Connected additionally to FPGA_DONE by connecting B11 and B7 on the PCI Express connector on the test board)
-// PIO1_2 (1D) - DBGIO5, fpga pin (Connected additionally to FPGA_PROG# by connecting B10 and B8 on the PCI Express connector)
+// PIO1_4 (0D) - FPGA_INIT#
+// PIO1_3 (1D) - FPGA_DONE
+// PIO1_2 (1D) - FPGA_PROG#
 
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -180,7 +180,7 @@ const int FlashCmd_PowerDown = 0xB9;
 const int FlashCmd_ReleasePowerDown = 0xAB;
 
 
-// PIO1_2 (1D) - DBGIO5, fpga pin (Connected additionally to FPGA_PROG# by connecting B10 and B8 on the PCI Express connector)
+// PIO1_2 (1D) - FPGA_PROG#
 void fpga_prog(int halt) // 1 = stop FPGA, 0 = run FPGA
 {
 
@@ -425,7 +425,7 @@ void fpga_spiexchange(unsigned char * dataSwap, int length)
 	fpga_csenable(0);
 }
 
-// PIO1_3 (1D) - DBGIO4, fpga pin (Connected additionally to FPGA_DONE by connecting B11 and B7 on the PCI Express connector on the test board)
+// PIO1_3 (1D) - FPGA_DONE
 int fpga_waitboot()
 {
 	// CDONE will float up when the FPGA is configured - 1 = configured
@@ -612,9 +612,9 @@ int main(void) {
 													// (DBGIO - Extra IO pins wired to the fpga)
 	IOCON_PIO3_2 = 0;								// PIO3_2 (0) - DBGIO1, fpga
 	IOCON_PIO1_11 = 0 | IOCON_ADMODE_DIGITAL;		// PIO1_11 (0D) - DBGIO2, fpga
-	IOCON_PIO1_4 = 0 | IOCON_ADMODE_DIGITAL;		// PIO1_4 (0D) - DBGIO3, fpga
-	IOCON_PIO1_3 = 1 | IOCON_ADMODE_DIGITAL; 		// PIO1_3 (1D) - DBGIO4, fpga pin (Connected additionally to FPGA_DONE by connecting B11 and B7 on the PCI Express connector on the test board)
-	IOCON_PIO1_2 = 1 | IOCON_ADMODE_DIGITAL | IOCON_MODE_PULLUP; // PIO1_2 (1D) - DBGIO5, fpga pin (Connected additionally to FPGA_PROG# by connecting B10 and B8 on the PCI Express connector)
+	IOCON_PIO1_4 = 0 | IOCON_ADMODE_DIGITAL | IOCON_MODE_PULLUP;		// PIO1_4 (0D) - FPGA_INIT#
+	IOCON_PIO1_3 = 1 | IOCON_ADMODE_DIGITAL; 		// PIO1_3 (1D) - FPGA_DONE
+	IOCON_PIO1_2 = 1 | IOCON_ADMODE_DIGITAL | IOCON_MODE_PULLUP; // PIO1_2 (1D) - FPGA_PROG#
 
 
 	// Set default values for critical pins

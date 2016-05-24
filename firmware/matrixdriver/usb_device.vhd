@@ -571,9 +571,14 @@ begin
                      romaddr <= unsigned("0" & romdata & "00");
                   when 3 =>
                      usb_descriptorlength <= unsigned(romdata);
-                     usb_state <= outdata;
+                  when 4 =>
                      usb_setup_data <= continuedescriptor;
+                     usb_state <= outdata;
                      usb_byteindex <= (others => '0');
+                     if usb_descriptorlength > usb_wLength then
+                        usb_descriptorlength <= usb_wLength(7 downto 0);
+                     end if;
+                     
                   when others =>
                end case;
             
@@ -600,14 +605,17 @@ begin
                   usbtx_byte <= romdata;
                   romaddr <= romaddr + 1;
    
-                  if usb_byteindex = 63 then
+                  if usb_byteindex(5 downto 0) = 63 then
                      usbtx_lastbyte <= '1';
                      usb_completeonack <= '1';
-                     usb_zlp_ack <= '1';
                      usb_state <= idle;
                      
+                     if (usb_byteindex + 1) = usb_descriptorlength then
+                        usb_setup_data <= sendzlp;
+                     end if;
                   elsif (usb_byteindex + 1) = usb_descriptorlength then
                      usbtx_lastbyte <= '1';
+                     usb_zlp_ack <= '1';
                      usb_advanceonack <= '1';
                      usb_state <= idle;
                      
@@ -746,7 +754,7 @@ begin
       INITP_06 => X"0000000000000000000000000000000000000000000000000000000000000000",
       INITP_07 => X"0000000000000000000000000000000000000000000000000000000000000000",
       -- INIT_00 to INIT_3F: Initial memory contents.
-      INIT_00 => X"010000004c73544c4000000002100112000034420441123c831b281120091204",
+      INIT_00 => X"010000004c73544c4000000002000112000034420441123c831b281120091204",
       INIT_01 => X"01050700004002810507000000ff020000040932800001010020020900000100",
       INIT_02 => X"000000004253554e495701000000000000000001000401000000002800004002",
       INIT_03 => X"6300690076006500440028000000010000010083000000000000000000000000",

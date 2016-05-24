@@ -124,7 +124,7 @@ function DeviceDescriptor($USBVID, $USBPID,
   AssembleStart;
   AddByte 0; # Fix length later
   AddByte 1; # Device descriptor type
-  AddWord 0x210; # USB 2.1
+  AddWord 0x200; # USB 2.0
   AddByte $class;
   AddByte $subclass
   AddByte $protocol;
