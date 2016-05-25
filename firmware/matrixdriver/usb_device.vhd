@@ -122,7 +122,7 @@ signal ramreaddata : std_logic_vector(7 downto 0);
 
 
 type usb_state_type is (idle, ignore, ignoreack, setup1, setup2, out1, out2, in1, in2, setupdata, senddelay, sendstart, preoutdata, outdata, indata, inzlp, indone, sendack, sendstall);
-type usb_setup_data_type is (invalid, sendzlp, sendzlpaddress, sendconfig, senddescriptor, continuedescriptor, recvvendor, sendvendor, completesetup);
+type usb_setup_data_type is (invalid, sendzlp, sendzlpaddress, sendstatus, sendconfig, senddescriptor, continuedescriptor, recvvendor, sendvendor, completesetup);
 signal usb_state : usb_state_type; 
 signal usb_setup_data : usb_setup_data_type;
 
@@ -435,6 +435,9 @@ begin
                      
                         if usb_requesttype(6 downto 5) = "00" then -- Standard requests
                            case usb_request is
+                           when X"00" => -- GET_STATUS
+                              usb_setup_data <= sendstatus;
+                           
                            when X"05" => -- SET_ADDRESS
                               usb_setup_data <= sendzlpaddress;
                               usb_next_address <= usb_wValue(6 downto 0);
@@ -595,6 +598,15 @@ begin
                usbtx_sendbyte <= '1';
                usb_byteindex <= usb_byteindex + 1;
                case usb_setup_data is
+               when sendstatus =>
+                  usbtx_byte <= X"00";
+                  
+                  if usb_byteindex(5 downto 0) = 1 then
+                     usbtx_lastbyte <= '1';
+                     usb_zlp_ack <= '1';
+                     usb_state <= idle;   
+                  end if;
+                  
                when sendconfig =>
                   usbtx_byte <= usb_configuration;
                   usbtx_lastbyte <= '1';
